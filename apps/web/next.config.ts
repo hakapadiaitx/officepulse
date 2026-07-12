@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client"],
+  transpilePackages: ["recharts"],
   images: {
     remotePatterns: [
       {
