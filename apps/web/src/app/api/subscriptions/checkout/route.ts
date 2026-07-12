@@ -45,13 +45,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      `https://${req.headers.get("host")}`;
+
     const checkoutSession = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?subscription=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing?canceled=true`,
+      success_url: `${baseUrl}/dashboard?subscription=success`,
+      cancel_url: `${baseUrl}/pricing?canceled=true`,
       metadata: { tenantId, planId },
       subscription_data: { metadata: { tenantId, planId } },
     });
