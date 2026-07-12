@@ -45,15 +45,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.log("[checkout] NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL);
-    console.log("[checkout] NEXTAUTH_URL:", process.env.NEXTAUTH_URL);
-    console.log("[checkout] host header:", req.headers.get("host"));
-    console.log("[checkout] x-forwarded-host:", req.headers.get("x-forwarded-host"));
-    const rawBase =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXTAUTH_URL ||
-      `https://${req.headers.get("x-forwarded-host") ?? req.headers.get("host")}`;
-    const baseUrl = rawBase.replace(/\/$/, ""); // strip any trailing slash
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const authUrl = process.env.NEXTAUTH_URL;
+    const forwardedHost = req.headers.get("x-forwarded-host");
+    const host = req.headers.get("host");
+    console.log("[checkout] NEXT_PUBLIC_APP_URL:", appUrl);
+    console.log("[checkout] NEXTAUTH_URL:", authUrl);
+    console.log("[checkout] host header:", host);
+    console.log("[checkout] x-forwarded-host:", forwardedHost);
+
+    let rawBase = appUrl || authUrl || `https://${forwardedHost ?? host}`;
+    // Ensure scheme is present (NEXTAUTH_URL is sometimes set without https://)
+    if (rawBase && !rawBase.startsWith("http")) rawBase = `https://${rawBase}`;
+    const baseUrl = rawBase.replace(/\/$/, "");
+    console.log("[checkout] resolved baseUrl:", baseUrl);
 
     const checkoutSession = await getStripe().checkout.sessions.create({
       customer: customerId,
