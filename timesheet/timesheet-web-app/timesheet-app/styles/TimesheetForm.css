@@ -1,0 +1,150 @@
+.timesheet-form-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 60vh;
+  padding: 20px;
+}
+
+.form-card {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-width: 500px;
+  width: 100%;
+}
+
+.form-card h2 {
+  margin-bottom: 25px;
+  color: var(--text-dark);
+  font-size: 24px;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.form-group input[type="date"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(68, 114, 196, 0.1);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-light);
+  font-size: 12px;
+}
+
+.form-info {
+  background-color: var(--bg-light);
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.form-info p {
+  margin: 5px 0;
+  color: var(--text-light);
+  font-size: 14px;
+}
+
+.form-info p:first-child {
+  margin-top: 0;
+  color: var(--text-dark);
+  font-weight: 500;
+}
+
+.group-home-name {
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.form-actions {
+  margin-top: 25px;
+}
+
+.form-actions .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 16px;
+}
+
+.info-box {
+  background-color: #e7f3ff;
+  border-left: 4px solid var(--primary-color);
+  padding: 15px;
+  margin-top: 30px;
+  border-radius: 4px;
+}
+
+.info-box h4 {
+  color: var(--primary-color);
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.info-box ul {
+  list-style: none;
+  padding: 0;
+}
+
+.info-box li {
+  color: var(--text-dark);
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.info-box li:before {
+  content: "✓ ";
+  color: var(--secondary-color);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+@media (max-width: 768px) {
+  .timesheet-form-container {
+    min-height: auto;
+    padding: 10px;
+  }
+
+  .form-card {
+    padding: 20px;
+  }
+
+  .form-card h2 {
+    font-size: 20px;
+  }
+}

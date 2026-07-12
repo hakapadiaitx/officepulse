@@ -1,0 +1,205 @@
+.group-home-manager {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.manager-header h1 {
+  font-size: 28px;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.success-message {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 12px 20px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* Form Card */
+.form-card {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin-bottom: 30px;
+  max-width: 600px;
+}
+
+.form-card h2 {
+  margin-bottom: 20px;
+  color: var(--text-dark);
+  font-size: 20px;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(68, 114, 196, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #ccc;
+}
+
+.form-group button {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  justify-content: center;
+}
+
+/* Group Homes List */
+.group-homes-list {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.group-homes-list h2 {
+  margin-bottom: 20px;
+  color: var(--text-dark);
+  font-size: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-light);
+}
+
+.empty-state p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.homes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.home-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #f5f5f5 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.home-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-4px);
+  border-color: var(--primary-color);
+}
+
+.home-card h3 {
+  margin: 0 0 15px 0;
+  color: var(--text-dark);
+  font-size: 18px;
+  word-break: break-word;
+}
+
+.home-card p {
+  margin: 8px 0;
+  color: var(--text-light);
+  font-size: 14px;
+}
+
+.home-card .address {
+  color: #2c5aa0;
+  font-weight: 500;
+}
+
+.home-card .phone {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+.home-card .created {
+  font-size: 12px;
+  color: #999;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .manager-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .manager-header h1 {
+    font-size: 24px;
+  }
+
+  .form-card {
+    padding: 20px;
+  }
+
+  .group-homes-list {
+    padding: 20px;
+  }
+
+  .homes-grid {
+    grid-template-columns: 1fr;
+  }
+}

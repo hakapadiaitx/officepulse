@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+}
+
+model Plan {
+  id                    String   @id @default(cuid())
+  name                  String
+  description           String
+  maxEmployees          Int
+  priceMonthly          Float
+  priceYearly           Float
+  stripePriceMonthlyId  String?
+  stripePriceYearlyId   String?
+  isActive              Boolean  @default(true)
+  features              Json     @default("[]")
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+
+  tenants               Tenant[]
+}
+
+model Tenant {
+  id                   String             @id @default(cuid())
+  name                 String
+  slug                 String             @unique
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  subscriptionStatus   SubscriptionStatus @default(TRIALING)
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+  planId               String?
+  plan                 Plan?              @relation(fields: [planId], references: [id])
+  maxEmployees         Int                @default(5)
+  logoUrl              String?
+  brandColor           String             @default("#4f46e5")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  users                User[]
+  employees            Employee[]
+  attendanceLogs       AttendanceLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([email, tenantId])
+  @@index([tenantId])
+}
+
+model Employee {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  email      String?
+  pinHash    String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  attendanceLogs AttendanceLog[]
+
+  @@index([tenantId])
+}
+
+model AttendanceLog {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  checkInTime  DateTime
+  checkOutTime DateTime?
+  isEndOfDay   Boolean   @default(false)
+  purpose      String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([checkInTime])
+  @@index([tenantId, checkInTime])
+}
