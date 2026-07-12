@@ -1,29 +1,64 @@
-"use client";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+﻿"use client";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
-interface DailyPoint { date: string; "In Office": number; "Out of Office": number; employees: number; }
+interface DailyPoint {
+  date: string;
+  "In Office": number;
+  "Out of Office": number;
+  employees: number;
+}
 
 export function DailyChart({ data }: { data: DailyPoint[] }) {
+  const enriched = data.map((d) => ({
+    ...d,
+    target: d.employees > 0 ? 8 * d.employees : null,
+  }));
+
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-        <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 12 }} unit="h" axisLine={false} tickLine={false} />
+      <ComposedChart data={enriched} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 11, fill: "#9ca3af" }}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          tick={{ fontSize: 11, fill: "#9ca3af" }}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(v) => `${v}h`}
+        />
         <Tooltip
-          formatter={(v) => [v != null ? `${Number(v).toFixed(1)}h` : "0h", ""]}
-          labelFormatter={(label, payload) => {
-            const employees = payload?.[0]?.payload?.employees ?? 0;
-            return `${label} · ${employees} employee${employees !== 1 ? "s" : ""}`;
+          formatter={(value, name) => {
+            const v = Number(value);
+            if (name === "target") return [`${v}h target`, "8h / employee"];
+            return [`${v.toFixed(1)}h`, String(name)];
           }}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+          labelStyle={{ fontSize: 12, fontWeight: 600 }}
+          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
         />
-        <Bar dataKey="In Office" stackId="day" fill="#16a34a" />
-        <Bar dataKey="Out of Office" stackId="day" fill="#fb923c" radius={[4, 4, 0, 0]} />
-        <ReferenceLine y={8} stroke="#9ca3af" strokeDasharray="4 3" strokeWidth={1.5}
-          label={{ value: "8h", position: "insideTopRight", fontSize: 11, fill: "#9ca3af", dy: -4 }}
+        <Bar dataKey="In Office" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={48} />
+        <Bar dataKey="Out of Office" fill="#fb923c" radius={[3, 3, 0, 0]} maxBarSize={48} />
+        <Line
+          dataKey="target"
+          stroke="#9ca3af"
+          strokeDasharray="5 3"
+          dot={false}
+          strokeWidth={1.5}
+          connectNulls
         />
-      </BarChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }
