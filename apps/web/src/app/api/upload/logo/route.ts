@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir, readdir, unlink } from "fs/promises";
-import { join } from "path";
+import { put, del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getTenantId } from "@/lib/session";
 
@@ -21,23 +20,23 @@ export async function POST(req: NextRequest) {
   if (file.size > MAX_BYTES)
     return NextResponse.json({ error: "File must be under 2 MB" }, { status: 400 });
 
+  // Delete existing blob if one is stored
+  const existing = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { logoUrl: true },
+  });
+  if (existing?.logoUrl?.startsWith("https://")) {
+    await del(existing.logoUrl).catch(() => {});
+  }
+
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
-  const uploadDir = join(process.cwd(), "public", "uploads", "logos");
-  await mkdir(uploadDir, { recursive: true });
+  const blob = await put(`logos/${tenantId}.${ext}`, file, {
+    access: "public",
+    contentType: file.type,
+  });
 
-  // Remove any previous logo file for this tenant
-  const existing = await readdir(uploadDir).catch(() => [] as string[]);
-  await Promise.all(
-    existing.filter((f) => f.startsWith(tenantId)).map((f) => unlink(join(uploadDir, f)).catch(() => {}))
-  );
-
-  const filename = `${tenantId}.${ext}`;
-  await writeFile(join(uploadDir, filename), Buffer.from(await file.arrayBuffer()));
-
-  const logoUrl = `/uploads/logos/${filename}`;
-  await prisma.tenant.update({ where: { id: tenantId }, data: { logoUrl } });
-
-  return NextResponse.json({ logoUrl });
+  await prisma.tenant.update({ where: { id: tenantId }, data: { logoUrl: blob.url } });
+  return NextResponse.json({ logoUrl: blob.url });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -45,11 +44,13 @@ export async function DELETE(req: NextRequest) {
   if (error) return error;
   const tenantId = getTenantId(session)!;
 
-  const uploadDir = join(process.cwd(), "public", "uploads", "logos");
-  const existing = await readdir(uploadDir).catch(() => [] as string[]);
-  await Promise.all(
-    existing.filter((f) => f.startsWith(tenantId)).map((f) => unlink(join(uploadDir, f)).catch(() => {}))
-  );
+  const existing = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { logoUrl: true },
+  });
+  if (existing?.logoUrl?.startsWith("https://")) {
+    await del(existing.logoUrl).catch(() => {});
+  }
 
   await prisma.tenant.update({ where: { id: tenantId }, data: { logoUrl: null } });
   return NextResponse.json({ ok: true });
