@@ -11,6 +11,7 @@ export default function PricingPage() {
   const router = useRouter();
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   async function handleSubscribe(planId: string) {
     if (!session) {
@@ -19,6 +20,7 @@ export default function PricingPage() {
     }
 
     setLoading(planId);
+    setCheckoutError(null);
     try {
       const res = await fetch("/api/subscriptions/checkout", {
         method: "POST",
@@ -26,7 +28,13 @@ export default function PricingPage() {
         body: JSON.stringify({ planId, interval }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setCheckoutError(data.error ?? "Unable to start checkout. Please try again.");
+      }
+    } catch {
+      setCheckoutError("Unable to connect. Please try again.");
     } finally {
       setLoading(null);
     }
@@ -76,6 +84,12 @@ export default function PricingPage() {
             </button>
           </div>
         </div>
+
+        {checkoutError && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm text-center">
+            {checkoutError}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-8">
           {PLANS.map((plan, i) => (
