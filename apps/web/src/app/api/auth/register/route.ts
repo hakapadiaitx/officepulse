@@ -19,18 +19,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = schema.parse(body);
 
+    // Check for existing account with same company name + email before generating slug
+    const existingAccount = await prisma.user.findFirst({
+      where: {
+        email: data.email.toLowerCase(),
+        tenant: { name: { equals: data.companyName, mode: "insensitive" } },
+      },
+    });
+    if (existingAccount) {
+      return NextResponse.json(
+        { error: "An account with this email already exists for this company.", existingAccount: true },
+        { status: 409 }
+      );
+    }
+
     const baseSlug = slugify(data.companyName);
     let slug = baseSlug;
     let suffix = 1;
     while (await prisma.tenant.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${suffix++}`;
-    }
-
-    const existingUser = await prisma.user.findFirst({
-      where: { email: data.email.toLowerCase(), tenant: { slug } },
-    });
-    if (existingUser) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 409 });
     }
 
     const trialEndsAt = new Date();

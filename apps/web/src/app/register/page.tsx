@@ -15,6 +15,7 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [accountExists, setAccountExists] = useState(false);
   const [brandColor, setBrandColor] = useState("#4f46e5");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -25,6 +26,7 @@ function RegisterForm() {
   function update(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     setError("");
+    setAccountExists(false);
   }
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,7 +57,11 @@ function RegisterForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(Array.isArray(data.error) ? data.error[0]?.message : data.error || "Registration failed");
+        if (data.existingAccount) {
+          setAccountExists(true);
+        } else {
+          setError(Array.isArray(data.error) ? data.error[0]?.message : data.error || "Registration failed");
+        }
         return;
       }
 
@@ -184,6 +190,16 @@ function RegisterForm() {
               )}
             </div>
 
+            {accountExists && (
+              <div className="text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 space-y-1">
+                <p className="font-medium text-amber-800">An account with this email already exists for this company.</p>
+                <p className="text-amber-700">
+                  <Link href="/login" className="underline font-medium">Sign in to your account</Link>
+                  {" "}or{" "}
+                  <Link href={`/login?forgot=1&email=${encodeURIComponent(form.email)}`} className="underline font-medium">reset your password</Link>.
+                </p>
+              </div>
+            )}
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
 
             <button
