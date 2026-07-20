@@ -45,6 +45,7 @@ model Tenant {
   stripeCustomerId     String?            @unique
   stripeSubscriptionId String?            @unique
   subscriptionStatus   SubscriptionStatus @default(TRIALING)
+  cancelAtPeriodEnd    Boolean            @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   planId               String?

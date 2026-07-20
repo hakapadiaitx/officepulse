@@ -44,6 +44,8 @@ export const authOptions: NextAuthOptions = {
           tenantName: user.tenant.name,
           role: user.role,
           subscriptionStatus: user.tenant.subscriptionStatus,
+          cancelAtPeriodEnd: user.tenant.cancelAtPeriodEnd,
+          currentPeriodEnd: user.tenant.currentPeriodEnd?.toISOString() ?? null,
           brandColor: user.tenant.brandColor,
           logoUrl: user.tenant.logoUrl ?? null,
         };
@@ -58,18 +60,22 @@ export const authOptions: NextAuthOptions = {
         token.tenantName = (user as any).tenantName;
         token.role = (user as any).role;
         token.subscriptionStatus = (user as any).subscriptionStatus;
+        token.cancelAtPeriodEnd = (user as any).cancelAtPeriodEnd;
+        token.currentPeriodEnd = (user as any).currentPeriodEnd;
         token.brandColor = (user as any).brandColor;
         token.logoUrl = (user as any).logoUrl;
       }
       if (trigger === "update" && token.tenantId) {
         const tenant = await prisma.tenant.findUnique({
           where: { id: token.tenantId as string },
-          select: { brandColor: true, logoUrl: true, subscriptionStatus: true },
+          select: { brandColor: true, logoUrl: true, subscriptionStatus: true, cancelAtPeriodEnd: true, currentPeriodEnd: true },
         });
         if (tenant) {
           token.brandColor = tenant.brandColor;
           token.logoUrl = tenant.logoUrl ?? null;
           token.subscriptionStatus = tenant.subscriptionStatus;
+          token.cancelAtPeriodEnd = tenant.cancelAtPeriodEnd;
+          token.currentPeriodEnd = tenant.currentPeriodEnd?.toISOString() ?? null;
         }
       }
       return token;
@@ -82,6 +88,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).tenantName = token.tenantName;
         (session.user as any).role = token.role;
         (session.user as any).subscriptionStatus = token.subscriptionStatus;
+        (session.user as any).cancelAtPeriodEnd = token.cancelAtPeriodEnd;
+        (session.user as any).currentPeriodEnd = token.currentPeriodEnd;
         (session.user as any).brandColor = token.brandColor;
         (session.user as any).logoUrl = token.logoUrl;
       }

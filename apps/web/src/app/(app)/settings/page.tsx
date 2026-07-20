@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2 } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, AlertTriangle } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
@@ -12,6 +12,9 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [copied, setCopied] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Branding state
   const [brandColor, setBrandColor] = useState(user?.brandColor ?? "#4f46e5");
@@ -102,6 +105,27 @@ export default function SettingsPage() {
       setBrandMsg("Branding saved! Refresh to see the colour applied across the app.");
     } else {
       setBrandMsg("Failed to save colour. Please try again.");
+    }
+  }
+
+  async function handleCancelSubscription() {
+    setCancelling(true);
+    setCancelMsg(null);
+    try {
+      const res = await fetch("/api/subscriptions/cancel", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        const expiryDate = new Date(data.accessEndsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        setCancelMsg({ type: "success", text: `Subscription cancelled. Your access continues until ${expiryDate}.` });
+        setCancelConfirm(false);
+        await updateSession();
+      } else {
+        setCancelMsg({ type: "error", text: data.error ?? "Failed to cancel. Please try again." });
+      }
+    } catch {
+      setCancelMsg({ type: "error", text: "Something went wrong. Please try again." });
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -270,14 +294,94 @@ export default function SettingsPage() {
       </div>
 
       {/* Subscription */}
-      <div className="card p-6">
-        <h2 className="font-semibold text-gray-900 mb-4">Subscription</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Upgrade your plan to add more employees and unlock advanced features.
-        </p>
-        <Link href="/pricing" className="btn-primary inline-flex items-center gap-2">
-          View Plans <ExternalLink className="w-4 h-4" />
-        </Link>
+      <div className="card p-6 space-y-4">
+        <h2 className="font-semibold text-gray-900">Subscription</h2>
+
+        {user?.subscriptionStatus === "ACTIVE" && !user?.cancelAtPeriodEnd && (
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Active plan</p>
+              <p className="text-xs text-gray-500 mt-0.5">Upgrade to add more employees or unlock features.</p>
+            </div>
+            <Link href="/pricing" className="btn-secondary text-sm inline-flex items-center gap-1.5">
+              Change plan <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {(user?.subscriptionStatus === "TRIALING" || user?.subscriptionStatus === "CANCELED") && (
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <p className="text-sm text-gray-500">Start a plan to unlock more employees and features.</p>
+            <Link href="/pricing" className="btn-primary text-sm inline-flex items-center gap-1.5">
+              View Plans <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {/* Cancellation scheduled notice */}
+        {user?.cancelAtPeriodEnd && user?.currentPeriodEnd && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">Subscription cancellation scheduled</p>
+              <p className="text-xs text-amber-700 mt-1">
+                Your access continues until <strong>{new Date(user.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</strong>. You will not be charged again.
+              </p>
+              <Link href="/pricing" className="inline-block mt-2 text-xs font-medium text-amber-800 underline">
+                Resubscribe
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel membership — only for active, non-cancelling subscriptions */}
+        {user?.subscriptionStatus === "ACTIVE" && !user?.cancelAtPeriodEnd && (
+          <div className="pt-2">
+            {cancelMsg && (
+              <p className={`text-sm px-3 py-2 rounded-lg border mb-3 ${cancelMsg.type === "error" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+                {cancelMsg.text}
+              </p>
+            )}
+
+            {!cancelConfirm ? (
+              <button
+                onClick={() => { setCancelConfirm(true); setCancelMsg(null); }}
+                className="text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
+              >
+                Cancel membership
+              </button>
+            ) : (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Cancel your subscription?</p>
+                    <p className="text-xs text-red-600 mt-1">
+                      You&apos;ll keep full access until the end of your current billing period. After that, you won&apos;t be charged again.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCancelSubscription}
+                    disabled={cancelling}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {cancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {cancelling ? "Cancelling…" : "Yes, cancel membership"}
+                  </button>
+                  <button
+                    onClick={() => { setCancelConfirm(false); setCancelMsg(null); }}
+                    disabled={cancelling}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    Keep membership
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
           where: { id: tenantId },
           data: {
             subscriptionStatus: (statusMap[sub.status] || "ACTIVE") as any,
+            cancelAtPeriodEnd: sub.cancel_at_period_end,
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
           },
         });
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
           where: { id: tenantId },
           data: {
             subscriptionStatus: "CANCELED",
+            cancelAtPeriodEnd: false,
             stripeSubscriptionId: null,
           },
         });

@@ -174,6 +174,87 @@ export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<void
   if (error) console.error("[email] Welcome email failed:", error);
 }
 
+interface CancellationEmailParams {
+  to: string;
+  firstName: string;
+  companyName: string;
+  planName: string;
+  accessEndsAt: Date;
+  loginUrl: string;
+}
+
+function cancellationHtml(p: CancellationEmailParams): string {
+  const expiryDate = p.accessEndsAt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your OfficePulse subscription has been cancelled</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+        <tr><td style="background:#4f46e5;padding:32px 40px;">
+          <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">OfficePulse</h1>
+          <p style="margin:4px 0 0;color:#c7d2fe;font-size:14px;">Subscription Cancellation</p>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${p.firstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+            We've received your cancellation request for the <strong>${p.planName}</strong> plan on your <strong>${p.companyName}</strong> workspace.
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:24px;">
+            <tr><td style="padding:20px 24px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#92400e;">Your access continues until</p>
+              <p style="margin:0;font-size:18px;font-weight:700;color:#78350f;">${expiryDate}</p>
+              <p style="margin:8px 0 0;font-size:13px;color:#92400e;">You will not be charged again. After this date your workspace will revert to the free trial limits.</p>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+            Changed your mind? You can resubscribe any time before <strong>${expiryDate}</strong> and keep all your data.
+          </p>
+
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+            <tr><td style="background:#4f46e5;border-radius:8px;">
+              <a href="${p.loginUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
+                Resubscribe →
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+            Thank you for using OfficePulse. We hope to see you again.<br>
+            — The OfficePulse Team
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
+            OfficePulse · You're receiving this because you cancelled your subscription at officepulse.app
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendCancellationEmail(params: CancellationEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("[email] RESEND_API_KEY not configured — skipping cancellation email");
+    return;
+  }
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const { error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: `Your OfficePulse subscription has been cancelled — access ends ${params.accessEndsAt.toLocaleDateString("en-US", { month: "long", day: "numeric" })}`,
+    html: cancellationHtml(params),
+  });
+  if (error) console.error("[email] Cancellation email failed:", error);
+}
+
 export async function sendInternalNotification(params: NotificationEmailParams): Promise<void> {
   const resend = getResend();
   const notifyEmail = process.env.NOTIFICATION_EMAIL;
