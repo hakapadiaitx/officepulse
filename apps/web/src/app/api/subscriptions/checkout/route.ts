@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
     let rawBase = appUrl || authUrl || `https://${forwardedHost ?? host}`;
     // Ensure scheme is present (NEXTAUTH_URL is sometimes set without https://)
     if (rawBase && !rawBase.startsWith("http")) rawBase = `https://${rawBase}`;
-    const baseUrl = rawBase.replace(/\/$/, "");
+    // Use only the origin to strip any path component (e.g. /en from NEXTAUTH_URL)
+    const baseUrl = new URL(rawBase).origin;
     console.log("[checkout] resolved baseUrl:", baseUrl);
 
     const checkoutSession = await getStripe().checkout.sessions.create({
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${baseUrl}/dashboard?subscription=success`,
+      success_url: `${baseUrl}/subscription/success?plan=${planId}`,
       cancel_url: `${baseUrl}/pricing?canceled=true`,
       metadata: { tenantId, planId },
       subscription_data: { metadata: { tenantId, planId } },
