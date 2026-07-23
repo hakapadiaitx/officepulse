@@ -14,15 +14,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { email, tenantSlug } = schema.parse(body);
 
+    console.log("[forgot-password] lookup email:", email.toLowerCase(), "slug:", tenantSlug);
+
     const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase(), tenant: { slug: tenantSlug } },
       include: { tenant: true },
     });
 
-    // Always return success to avoid leaking whether an account exists
     if (!user) {
+      console.log("[forgot-password] no user found for that email+slug combination");
       return NextResponse.json({ ok: true });
     }
+
+    console.log("[forgot-password] user found, generating reset token");
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -35,6 +39,8 @@ export async function POST(req: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "https://officepulse.app";
     const baseUrl = new URL(appUrl).origin;
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+    console.log("[forgot-password] sending reset email to:", user.email);
 
     await sendPasswordResetEmail({
       to: user.email,
