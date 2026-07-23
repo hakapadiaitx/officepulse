@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Clock } from "lucide-react";
 
 export default function LoginPage() {
@@ -69,7 +70,15 @@ export default function LoginPage() {
               <input className="input" type="email" placeholder="you@company.com" value={form.email} onChange={(e) => update("email", e.target.value)} required />
             </div>
             <div>
-              <label className="label">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label !mb-0">Password</label>
+                <Link
+                  href={`/forgot-password?email=${encodeURIComponent(form.email)}&company=${encodeURIComponent(form.tenantSlug)}`}
+                  className="text-xs text-brand-600 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input className="input" type="password" placeholder="Your password" value={form.password} onChange={(e) => update("password", e.target.value)} required />
             </div>
 

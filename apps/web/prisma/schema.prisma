@@ -69,9 +69,11 @@ model User {
   passwordHash String
   firstName    String
   lastName     String
-  role         UserRole @default(OWNER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role              UserRole  @default(OWNER)
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@unique([email, tenantId])
   @@index([tenantId])
