@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, AlertTriangle } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
@@ -321,7 +321,7 @@ export default function SettingsPage() {
         {/* Cancellation scheduled notice */}
         {user?.cancelAtPeriodEnd && user?.currentPeriodEnd && (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <TriangleAlert className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800">Subscription cancellation scheduled</p>
               <p className="text-xs text-amber-700 mt-1">
@@ -353,7 +353,7 @@ export default function SettingsPage() {
             ) : (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <TriangleAlert className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-red-800">Cancel your subscription?</p>
                     <p className="text-xs text-red-600 mt-1">

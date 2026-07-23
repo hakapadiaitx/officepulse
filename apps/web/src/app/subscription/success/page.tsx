@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle, Clock, Users, BarChart3, Tablet } from "lucide-react";
+import { CheckCircle, Clock, Users, BarChart3, Monitor } from "lucide-react";
 
 const PLAN_META: Record<string, { name: string; color: string; features: string[] }> = {
   starter: {
@@ -21,7 +21,7 @@ const PLAN_META: Record<string, { name: string; color: string; features: string[
 
 const NEXT_STEPS = [
   { icon: Users, title: "Add your employees", desc: "Go to Employees → Add Employee. Each person gets a 4-digit PIN." },
-  { icon: Tablet, title: "Set up the kiosk", desc: "Share your kiosk URL on a tablet near your entrance — no login needed." },
+  { icon: Monitor, title: "Set up the kiosk", desc: "Share your kiosk URL on a tablet near your entrance — no login needed." },
   { icon: BarChart3, title: "Track attendance", desc: "Employees tap Arrive or Leave. You see it live on your dashboard." },
 ];
 
