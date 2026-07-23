@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     if (owner) {
       const planId = (session!.user as any).planId as string | undefined;
       const plan = PLANS.find((p) => p.id === planId);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "https://officepulse.app";
+      let appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? "https://officepulse.app";
+      if (!appUrl.startsWith("http")) appUrl = `https://${appUrl}`;
       const baseUrl = new URL(appUrl).origin;
 
       await sendCancellationEmail({
