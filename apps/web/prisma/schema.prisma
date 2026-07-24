@@ -47,6 +47,7 @@ model Tenant {
   subscriptionStatus   SubscriptionStatus @default(TRIALING)
   cancelAtPeriodEnd    Boolean            @default(false)
   currentPlan          String?
+  billingInterval      String             @default("monthly")
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   planId               String?

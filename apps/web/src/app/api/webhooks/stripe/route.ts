@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantId = session.metadata?.tenantId;
         const planId = session.metadata?.planId;
+        const interval = session.metadata?.interval === "yearly" ? "yearly" : "monthly";
         if (!tenantId) break;
 
         const plan = PLANS.find((p) => p.id === planId);
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
             stripeSubscriptionId: subscription?.id,
             subscriptionStatus: "ACTIVE",
             currentPlan: planId ?? null,
+            planId: planId ?? null,
+            billingInterval: interval,
             maxEmployees: plan?.maxEmployees ?? 10,
             currentPeriodEnd: subscription?.current_period_end
               ? new Date(subscription.current_period_end * 1000)
@@ -61,12 +64,16 @@ export async function POST(req: NextRequest) {
           trialing: "TRIALING",
         };
 
+        const priceInterval = sub.items?.data[0]?.price?.recurring?.interval;
+        const billingInterval = priceInterval === "year" ? "yearly" : "monthly";
+
         await prisma.tenant.update({
           where: { id: tenantId },
           data: {
             subscriptionStatus: (statusMap[sub.status] || "ACTIVE") as any,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            billingInterval,
           },
         });
         break;
@@ -83,6 +90,8 @@ export async function POST(req: NextRequest) {
             subscriptionStatus: "CANCELED",
             cancelAtPeriodEnd: false,
             currentPlan: null,
+            planId: null,
+            billingInterval: "monthly",
             stripeSubscriptionId: null,
           },
         });

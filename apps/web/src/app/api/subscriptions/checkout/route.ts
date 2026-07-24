@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/subscription/success?plan=${planId}`,
       cancel_url: `${baseUrl}/pricing?canceled=true`,
-      metadata: { tenantId, planId },
-      subscription_data: { metadata: { tenantId, planId } },
+      metadata: { tenantId, planId, interval },
+      subscription_data: { metadata: { tenantId, planId, interval } },
     });
 
     return NextResponse.json({ url: checkoutSession.url });

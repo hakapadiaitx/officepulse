@@ -312,6 +312,12 @@ export default function SettingsPage() {
                 {user?.cancelAtPeriodEnd ? "Cancels at period end" : user?.subscriptionStatus}
               </span>
             </div>
+            <div>
+              <p className="text-gray-500">Billing</p>
+              <p className="font-medium text-gray-900 mt-0.5 capitalize">
+                {user?.billingInterval === "yearly" ? "Yearly" : "Monthly"}
+              </p>
+            </div>
             {user?.currentPeriodEnd && (
               <div>
                 <p className="text-gray-500">{user?.cancelAtPeriodEnd ? "Access until" : "Renews"}</p>

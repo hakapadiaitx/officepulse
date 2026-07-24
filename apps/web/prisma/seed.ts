@@ -6,11 +6,54 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding database...");
 
+  // Upsert plans — IDs match the PLANS array in stripe.ts for easy FK linking
+  const plans = [
+    {
+      id: "starter",
+      name: "Starter",
+      description: "Perfect for small teams",
+      maxEmployees: 10,
+      priceMonthly: 19,
+      priceYearly: 190,
+      features: ["Up to 10 employees", "Attendance tracking", "Basic reports", "Email support"],
+      sortOrder: 0,
+    },
+    {
+      id: "professional",
+      name: "Professional",
+      description: "For growing businesses",
+      maxEmployees: 50,
+      priceMonthly: 49,
+      priceYearly: 490,
+      features: ["Up to 50 employees", "Advanced reporting", "Daily/weekly/monthly reports", "CSV export", "Priority support"],
+      sortOrder: 1,
+    },
+    {
+      id: "enterprise",
+      name: "Enterprise",
+      description: "For large organizations",
+      maxEmployees: 999999,
+      priceMonthly: 149,
+      priceYearly: 1490,
+      features: ["Unlimited employees", "All reports & exports", "API access", "Dedicated account manager", "SLA guarantee"],
+      sortOrder: 2,
+    },
+  ];
+
+  for (const plan of plans) {
+    await prisma.plan.upsert({
+      where: { id: plan.id },
+      update: { ...plan },
+      create: { ...plan },
+    });
+  }
+  console.log("Plans seeded:", plans.map((p) => p.name).join(", "));
+
   // Create a demo tenant
   const slug = "demo-company";
   const existing = await prisma.tenant.findUnique({ where: { slug } });
   if (existing) {
-    console.log("Demo tenant already exists, skipping seed.");
+    console.log("Demo tenant already exists, skipping tenant seed.");
     return;
   }
 

@@ -47,6 +47,7 @@ export const authOptions: NextAuthOptions = {
           cancelAtPeriodEnd: user.tenant.cancelAtPeriodEnd,
           currentPeriodEnd: user.tenant.currentPeriodEnd?.toISOString() ?? null,
           currentPlan: user.tenant.currentPlan ?? null,
+          billingInterval: user.tenant.billingInterval,
           brandColor: user.tenant.brandColor,
           logoUrl: user.tenant.logoUrl ?? null,
         };
@@ -64,13 +65,14 @@ export const authOptions: NextAuthOptions = {
         token.cancelAtPeriodEnd = (user as any).cancelAtPeriodEnd;
         token.currentPeriodEnd = (user as any).currentPeriodEnd;
         token.currentPlan = (user as any).currentPlan;
+        token.billingInterval = (user as any).billingInterval;
         token.brandColor = (user as any).brandColor;
         token.logoUrl = (user as any).logoUrl;
       }
       if (trigger === "update" && token.tenantId) {
         const tenant = await prisma.tenant.findUnique({
           where: { id: token.tenantId as string },
-          select: { brandColor: true, logoUrl: true, subscriptionStatus: true, cancelAtPeriodEnd: true, currentPeriodEnd: true, currentPlan: true },
+          select: { brandColor: true, logoUrl: true, subscriptionStatus: true, cancelAtPeriodEnd: true, currentPeriodEnd: true, currentPlan: true, billingInterval: true },
         });
         if (tenant) {
           token.brandColor = tenant.brandColor;
@@ -79,6 +81,7 @@ export const authOptions: NextAuthOptions = {
           token.cancelAtPeriodEnd = tenant.cancelAtPeriodEnd;
           token.currentPeriodEnd = tenant.currentPeriodEnd?.toISOString() ?? null;
           token.currentPlan = tenant.currentPlan ?? null;
+          token.billingInterval = tenant.billingInterval;
         }
       }
       return token;
@@ -94,6 +97,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).cancelAtPeriodEnd = token.cancelAtPeriodEnd;
         (session.user as any).currentPeriodEnd = token.currentPeriodEnd;
         (session.user as any).currentPlan = token.currentPlan;
+        (session.user as any).billingInterval = token.billingInterval;
         (session.user as any).brandColor = token.brandColor;
         (session.user as any).logoUrl = token.logoUrl;
       }
