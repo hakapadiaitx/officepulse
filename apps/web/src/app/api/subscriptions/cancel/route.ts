@@ -21,15 +21,35 @@ export async function POST(req: NextRequest) {
     });
 
     if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
-    if (!tenant.stripeSubscriptionId) {
-      return NextResponse.json({ error: "No active subscription found" }, { status: 400 });
-    }
     if (tenant.cancelAtPeriodEnd) {
       return NextResponse.json({ error: "Subscription is already scheduled for cancellation" }, { status: 400 });
     }
 
+    // Resolve the subscription ID — prefer stored value, fall back to Stripe lookup via customer
+    let subscriptionId = tenant.stripeSubscriptionId;
+    if (!subscriptionId) {
+      if (!tenant.stripeCustomerId) {
+        return NextResponse.json({ error: "No active subscription found" }, { status: 400 });
+      }
+      const list = await getStripe().subscriptions.list({
+        customer: tenant.stripeCustomerId,
+        status: "active",
+        limit: 1,
+      });
+      const found = list.data[0];
+      if (!found) {
+        return NextResponse.json({ error: "No active subscription found" }, { status: 400 });
+      }
+      subscriptionId = found.id;
+      // Persist it so future calls don't need the lookup
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { stripeSubscriptionId: subscriptionId },
+      });
+    }
+
     // Cancel at period end — customer keeps access until billing cycle ends
-    const subscription = await getStripe().subscriptions.update(tenant.stripeSubscriptionId, {
+    const subscription = await getStripe().subscriptions.update(subscriptionId, {
       cancel_at_period_end: true,
     });
 
