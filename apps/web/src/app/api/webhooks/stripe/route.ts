@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
           data: {
             stripeSubscriptionId: subscription?.id,
             subscriptionStatus: "ACTIVE",
+            currentPlan: planId ?? null,
             maxEmployees: plan?.maxEmployees ?? 10,
             currentPeriodEnd: subscription?.current_period_end
               ? new Date(subscription.current_period_end * 1000)
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
           data: {
             subscriptionStatus: "CANCELED",
             cancelAtPeriodEnd: false,
+            currentPlan: null,
             stripeSubscriptionId: null,
           },
         });

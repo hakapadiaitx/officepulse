@@ -156,14 +156,8 @@ export default function SettingsPage() {
             <p className="font-medium text-gray-900 mt-0.5">{user?.email}</p>
           </div>
           <div>
-            <p className="text-gray-500">Subscription</p>
-            <span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-full ${
-              user?.subscriptionStatus === "ACTIVE"   ? "bg-green-100 text-green-700" :
-              user?.subscriptionStatus === "TRIALING" ? "bg-blue-100 text-blue-700"  :
-              "bg-red-100 text-red-700"
-            }`}>
-              {user?.subscriptionStatus}
-            </span>
+            <p className="text-gray-500">Role</p>
+            <p className="font-medium text-gray-900 mt-0.5 capitalize">{user?.role?.toLowerCase() ?? "—"}</p>
           </div>
         </div>
       </div>
@@ -297,15 +291,42 @@ export default function SettingsPage() {
       <div className="card p-6 space-y-4">
         <h2 className="font-semibold text-gray-900">Subscription</h2>
 
-        {user?.subscriptionStatus === "ACTIVE" && !user?.cancelAtPeriodEnd && (
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+        {/* Plan details row — always shown when active or cancelling */}
+        {(user?.subscriptionStatus === "ACTIVE" || user?.cancelAtPeriodEnd) && (
+          <div className="grid grid-cols-2 gap-4 text-sm py-3 border-b border-gray-100">
             <div>
-              <p className="text-sm font-medium text-gray-900">Active plan</p>
-              <p className="text-xs text-gray-500 mt-0.5">Upgrade to add more employees or unlock features.</p>
+              <p className="text-gray-500">Current Plan</p>
+              <p className="font-semibold text-gray-900 mt-0.5 capitalize">
+                {user?.currentPlan
+                  ? user.currentPlan.charAt(0).toUpperCase() + user.currentPlan.slice(1)
+                  : "—"}
+              </p>
             </div>
-            <Link href="/pricing" className="btn-secondary text-sm inline-flex items-center gap-1.5">
-              Change plan <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
+            <div>
+              <p className="text-gray-500">Status</p>
+              <span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-full ${
+                user?.cancelAtPeriodEnd         ? "bg-amber-100 text-amber-700"  :
+                user?.subscriptionStatus === "ACTIVE" ? "bg-green-100 text-green-700" :
+                "bg-gray-100 text-gray-600"
+              }`}>
+                {user?.cancelAtPeriodEnd ? "Cancels at period end" : user?.subscriptionStatus}
+              </span>
+            </div>
+            {user?.currentPeriodEnd && (
+              <div>
+                <p className="text-gray-500">{user?.cancelAtPeriodEnd ? "Access until" : "Renews"}</p>
+                <p className="font-medium text-gray-900 mt-0.5">
+                  {new Date(user.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </p>
+              </div>
+            )}
+            {user?.subscriptionStatus === "ACTIVE" && !user?.cancelAtPeriodEnd && (
+              <div className="flex items-end">
+                <Link href="/pricing" className="btn-secondary text-sm inline-flex items-center gap-1.5">
+                  Change plan <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
