@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Plus, Pencil, UserX, CheckCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Pencil, UserX, CheckCircle, Download, Upload, X } from "lucide-react";
+import type { BulkResult } from "@/app/api/employees/bulk/route";
 
 interface Employee {
   id: string;
@@ -16,6 +17,9 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{ created: number; results: BulkResult[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function fetchEmployees() {
     const res = await fetch("/api/employees");
@@ -24,6 +28,21 @@ export default function EmployeesPage() {
   }
 
   useEffect(() => { fetchEmployees(); }, []);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImporting(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/employees/bulk", { method: "POST", body: fd });
+    const data = await res.json();
+    setImporting(false);
+    if (!res.ok) { alert(data.error ?? "Import failed"); return; }
+    setImportResults(data);
+    fetchEmployees();
+  }
 
   async function deactivate(id: string) {
     if (!confirm("Remove this employee?")) return;
@@ -35,9 +54,19 @@ export default function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Employees</h1>
-        <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Employee
-        </button>
+        <div className="flex items-center gap-2">
+          <a href="/api/employees/template" download className="btn-secondary flex items-center gap-2 text-sm">
+            <Download className="w-4 h-4" /> Template
+          </a>
+          <button onClick={() => fileInputRef.current?.click()} disabled={importing}
+            className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50">
+            <Upload className="w-4 h-4" /> {importing ? "Importing…" : "Import Excel"}
+          </button>
+          <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleImport} />
+          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Employee
+          </button>
+        </div>
       </div>
 
       <div className="card">
@@ -103,6 +132,13 @@ export default function EmployeesPage() {
         <EmployeeModal
           employee={editEmployee}
           onClose={() => { setShowAdd(false); setEditEmployee(null); fetchEmployees(); }}
+        />
+      )}
+
+      {importResults && (
+        <ImportResultsModal
+          results={importResults}
+          onClose={() => setImportResults(null)}
         />
       )}
     </div>
@@ -191,6 +227,48 @@ function EmployeeModal({ employee, onClose }: { employee: Employee | null; onClo
             {loading ? "Saving..." : employee ? "Save Changes" : "Add Employee"}
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ImportResultsModal({
+  results,
+  onClose,
+}: {
+  results: { created: number; results: BulkResult[] };
+  onClose: () => void;
+}) {
+  const failed = results.results.filter((r) => r.status === "failed");
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Import Results</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-4">
+          <div className={`rounded-xl px-4 py-3 text-sm font-medium ${results.created > 0 ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-600"}`}>
+            {results.created} employee{results.created !== 1 ? "s" : ""} created successfully
+          </div>
+          {failed.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">{failed.length} row{failed.length !== 1 ? "s" : ""} failed:</p>
+              <div className="space-y-1.5">
+                {failed.map((r) => (
+                  <div key={r.row} className="flex items-start gap-2 text-sm bg-red-50 rounded-lg px-3 py-2">
+                    <span className="text-red-400 font-mono text-xs mt-0.5">Row {r.row}</span>
+                    <span className="font-medium text-gray-800 flex-1">{r.name}</span>
+                    <span className="text-red-600">{r.error}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-6 pb-6">
+          <button onClick={onClose} className="btn-primary w-full py-2.5">Done</button>
+        </div>
       </div>
     </div>
   );
