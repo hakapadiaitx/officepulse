@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
@@ -15,6 +15,42 @@ export default function SettingsPage() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Kiosk PIN management
+  interface EmpRow { id: string; firstName: string; lastName: string; email: string | null; }
+  const [employees, setEmployees] = useState<EmpRow[]>([]);
+  const [empsLoading, setEmpsLoading] = useState(true);
+  const [pinValues, setPinValues] = useState<Record<string, string>>({});
+  const [pinVisible, setPinVisible] = useState<Record<string, boolean>>({});
+  const [pinSaving, setPinSaving] = useState<Record<string, boolean>>({});
+  const [pinMsg, setPinMsg] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+
+  useEffect(() => {
+    fetch("/api/employees")
+      .then((r) => r.json())
+      .then((data) => setEmployees(Array.isArray(data) ? data : []))
+      .finally(() => setEmpsLoading(false));
+  }, []);
+
+  async function savePin(empId: string) {
+    const pin = pinValues[empId] ?? "";
+    if (pin.length !== 4) return;
+    setPinSaving((s) => ({ ...s, [empId]: true }));
+    setPinMsg((m) => ({ ...m, [empId]: undefined as any }));
+    const res = await fetch(`/api/employees/${empId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin }),
+    });
+    setPinSaving((s) => ({ ...s, [empId]: false }));
+    if (res.ok) {
+      setPinMsg((m) => ({ ...m, [empId]: { type: "success", text: "PIN updated." } }));
+      setPinValues((v) => ({ ...v, [empId]: "" }));
+    } else {
+      const d = await res.json();
+      setPinMsg((m) => ({ ...m, [empId]: { type: "error", text: d.error ?? "Failed to update PIN." } }));
+    }
+  }
 
   // Branding state
   const [brandColor, setBrandColor] = useState(user?.brandColor ?? "#4f46e5");
@@ -285,6 +321,85 @@ export default function SettingsPage() {
         <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
           <strong>How it works:</strong> Employees can Arrive, Check Out (temporary), Return, or Leave for Day — all authenticated by their private 4-digit PIN.
         </div>
+      </div>
+
+      {/* Kiosk Employee PINs */}
+      <div className="card p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900">Kiosk Employee PINs</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Set or reset the 4-digit PIN each employee uses to clock in and out at the kiosk.</p>
+        </div>
+
+        {empsLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+          </div>
+        ) : employees.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">
+            No employees yet.{" "}
+            <a href="/employees" className="underline" style={{ color: brandColor }}>Add employees</a> first.
+          </p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {employees.map((emp) => {
+              const pin = pinValues[emp.id] ?? "";
+              const saving = pinSaving[emp.id] ?? false;
+              const msg = pinMsg[emp.id];
+              const visible = pinVisible[emp.id] ?? false;
+              return (
+                <div key={emp.id} className="py-3 flex items-center gap-4">
+                  {/* Avatar + name */}
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0" style={{ backgroundColor: brandColor }}>
+                    {emp.firstName[0]}{emp.lastName[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{emp.firstName} {emp.lastName}</p>
+                    {emp.email && <p className="text-xs text-gray-400 truncate">{emp.email}</p>}
+                    {msg && (
+                      <p className={`text-xs mt-1 ${msg.type === "success" ? "text-green-600" : "text-red-500"}`}>{msg.text}</p>
+                    )}
+                  </div>
+                  {/* PIN input + save */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="relative">
+                      <KeyRound className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      <input
+                        type={visible ? "text" : "password"}
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="••••"
+                        value={pin}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setPinValues((prev) => ({ ...prev, [emp.id]: v }));
+                          setPinMsg((m) => ({ ...m, [emp.id]: undefined as any }));
+                        }}
+                        className="pl-8 pr-8 py-1.5 w-28 text-center text-sm font-mono tracking-widest border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-0"
+                        style={{ focusBorderColor: brandColor } as React.CSSProperties}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPinVisible((v) => ({ ...v, [emp.id]: !v[emp.id] }))}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                      >
+                        {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => savePin(emp.id)}
+                      disabled={pin.length !== 4 || saving}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-40 transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: brandColor }}
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      {saving ? "Saving" : "Set"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Subscription */}
