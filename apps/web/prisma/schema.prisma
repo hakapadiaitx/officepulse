@@ -48,6 +48,7 @@ model Tenant {
   cancelAtPeriodEnd    Boolean            @default(false)
   currentPlan          String?
   billingInterval      String             @default("monthly")
+  kioskPinHash         String?
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   planId               String?

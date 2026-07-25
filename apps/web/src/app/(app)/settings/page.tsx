@@ -336,9 +336,9 @@ export default function SettingsPage() {
       {/* My Kiosk PIN */}
       <div className="card p-6 space-y-4">
         <div>
-          <h2 className="font-semibold text-gray-900">My Kiosk PIN</h2>
+          <h2 className="font-semibold text-gray-900">Kiosk PIN</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Set a personal 4-digit PIN so you can clock in and out at the kiosk terminal alongside your employees.
+            Set a 4-digit PIN for your company kiosk. Employees enter this PIN at the terminal to access the attendance screen.
           </p>
         </div>
 
@@ -353,8 +353,8 @@ export default function SettingsPage() {
               <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${kioskPinStatus === "set" ? "bg-green-500" : "bg-gray-300"}`} />
               <p className="text-sm text-gray-700">
                 {kioskPinStatus === "set"
-                  ? "Kiosk PIN is set — you appear on the kiosk terminal."
-                  : "No kiosk PIN set — you cannot currently use the kiosk."}
+                  ? "Kiosk PIN is set — employees can access the terminal."
+                  : "No kiosk PIN set — employees cannot access the terminal."}
               </p>
             </div>
 
@@ -408,7 +408,7 @@ export default function SettingsPage() {
                 className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1"
               >
                 {kioskPinRemoving ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                Remove my kiosk access
+                Remove kiosk PIN
               </button>
             )}
           </div>
