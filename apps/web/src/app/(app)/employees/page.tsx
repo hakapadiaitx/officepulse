@@ -126,7 +126,8 @@ function EmployeeModal({ employee, onClose }: { employee: Employee | null; onClo
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!employee && form.pin.length !== 4) { setError("PIN must be exactly 4 digits."); return; }
+    if (form.pin && form.pin.length !== 4) { setError("PIN must be exactly 4 digits."); return; }
+    if (!employee && !form.pin) { setError("PIN is required for new employees."); return; }
 
     setLoading(true);
     const url = employee ? `/api/employees/${employee.id}` : "/api/employees";

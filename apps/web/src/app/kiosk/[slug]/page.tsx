@@ -155,6 +155,13 @@ export default function KioskPage() {
 
   function closeModal() { setSelected(null); setSuccessMsg(""); setEmpPin(""); }
 
+  function handleEmpKey(key: string) {
+    setModalError("");
+    if (key === "⌫") { setEmpPin((p) => p.slice(0, -1)); return; }
+    if (key === "✓") { if (empPin.length === 4 && !submitting) handleAction(); return; }
+    if (empPin.length < 4) setEmpPin((p) => p + key);
+  }
+
   async function handleAction() {
     if (!selected) return;
     if (empPin.length !== 4) { setModalError("Please enter your 4-digit PIN."); return; }
@@ -406,27 +413,21 @@ export default function KioskPage() {
                   {/* Employee PIN */}
                   <div>
                     <label className="label">Your 4-digit PIN</label>
-                    <div className="relative mt-1">
-                      {/* Dot display */}
-                      <div className="flex gap-3 justify-center py-3 pointer-events-none select-none">
-                        {[0,1,2,3].map((i) => (
-                          <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
-                            style={{ backgroundColor: empPin.length > i ? brandColor : "transparent", borderColor: empPin.length > i ? brandColor : "#d1d5db" }} />
-                        ))}
-                      </div>
-                      {/* Invisible input captures taps and opens number keyboard */}
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={4}
-                        autoComplete="off"
-                        value={empPin}
-                        onChange={(e) => { setEmpPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setModalError(""); }}
-                        autoFocus
-                        className="absolute inset-0 w-full opacity-0 cursor-pointer"
-                      />
+                    <div className="flex gap-3 justify-center py-3">
+                      {[0,1,2,3].map((i) => (
+                        <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+                          style={{ backgroundColor: empPin.length > i ? brandColor : "transparent", borderColor: empPin.length > i ? brandColor : "#d1d5db" }} />
+                      ))}
                     </div>
-                    <p className="text-xs text-center text-gray-400 mt-1">Tap above and enter your PIN on the keyboard</p>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      {NUMPAD.map((k) => (
+                        <button key={k} type="button" onClick={() => handleEmpKey(k)}
+                          disabled={k === "✓" && (empPin.length !== 4 || submitting)}
+                          className={`py-3 rounded-xl text-lg font-semibold transition-all active:scale-95 disabled:opacity-40 ${k === "✓" ? "bg-green-500 text-white hover:bg-green-600" : k === "⌫" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-gray-50 text-gray-900 hover:bg-gray-100"}`}>
+                          {k}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {modalError && (
