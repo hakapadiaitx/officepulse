@@ -67,6 +67,7 @@ export default function KioskPage() {
   // Action modal
   const [selected, setSelected] = useState<{ emp: Employee; action: Action } | null>(null);
   const [purpose, setPurpose] = useState("");
+  const [empPin, setEmpPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -147,14 +148,16 @@ export default function KioskPage() {
   function openModal(emp: Employee, action: Action) {
     setSelected({ emp, action });
     setPurpose("");
+    setEmpPin("");
     setModalError("");
     setSuccessMsg("");
   }
 
-  function closeModal() { setSelected(null); setSuccessMsg(""); }
+  function closeModal() { setSelected(null); setSuccessMsg(""); setEmpPin(""); }
 
   async function handleAction() {
     if (!selected) return;
+    if (empPin.length !== 4) { setModalError("Please enter your 4-digit PIN."); return; }
     if (selected.action === "checkout" && !purpose.trim()) { setModalError("Please enter a purpose."); return; }
     setSubmitting(true);
     setModalError("");
@@ -164,6 +167,7 @@ export default function KioskPage() {
       body: JSON.stringify({
         action: selected.action,
         employeeId: selected.emp.id,
+        pin: empPin,
         timestamp: new Date().toISOString(),
         purpose: purpose || undefined,
       }),
@@ -395,13 +399,40 @@ export default function KioskPage() {
                     <div>
                       <label className="label">Purpose / Reason <span className="text-red-400">*</span></label>
                       <input className="input" placeholder="e.g. Client meeting, Lunch…" value={purpose}
-                        onChange={(e) => { setPurpose(e.target.value); setModalError(""); }} autoFocus />
+                        onChange={(e) => { setPurpose(e.target.value); setModalError(""); }} />
                     </div>
                   )}
+
+                  {/* Employee PIN */}
+                  <div>
+                    <label className="label">Your 4-digit PIN</label>
+                    <div className="relative mt-1">
+                      {/* Dot display */}
+                      <div className="flex gap-3 justify-center py-3 pointer-events-none select-none">
+                        {[0,1,2,3].map((i) => (
+                          <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+                            style={{ backgroundColor: empPin.length > i ? brandColor : "transparent", borderColor: empPin.length > i ? brandColor : "#d1d5db" }} />
+                        ))}
+                      </div>
+                      {/* Invisible input captures taps and opens number keyboard */}
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        autoComplete="off"
+                        value={empPin}
+                        onChange={(e) => { setEmpPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setModalError(""); }}
+                        autoFocus
+                        className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                      />
+                    </div>
+                    <p className="text-xs text-center text-gray-400 mt-1">Tap above and enter your PIN on the keyboard</p>
+                  </div>
+
                   {modalError && (
                     <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{modalError}</p>
                   )}
-                  <button onClick={handleAction} disabled={submitting}
+                  <button onClick={handleAction} disabled={submitting || empPin.length !== 4}
                     className={`w-full py-3 rounded-xl font-bold text-base transition-opacity hover:opacity-90 disabled:opacity-50 ${actionConfig[selected.action].brand ? "text-white" : actionConfig[selected.action].cls}`}
                     style={actionConfig[selected.action].brand ? { backgroundColor: brandColor } : undefined}>
                     {submitting ? "Processing…" : actionConfig[selected.action].confirm}

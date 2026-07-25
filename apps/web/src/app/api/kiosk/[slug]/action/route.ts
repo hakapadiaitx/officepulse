@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { verifyPin } from "@/lib/auth";
 
 const schema = z.object({
   action: z.enum(["arrive", "checkout", "return", "leave"]),
   employeeId: z.string(),
+  pin: z.string().length(4).regex(/^\d{4}$/),
   timestamp: z.string().datetime(),
   purpose: z.string().min(1).max(500).optional(),
   notes: z.string().max(1000).optional(),
 });
 
-// Public endpoint — authenticated by the company kiosk PIN at the unlock step.
+// Public endpoint — company kiosk PIN gates access at the unlock step;
+// employee PIN verifies the individual action here.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
@@ -26,6 +29,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       where: { id: data.employeeId, tenantId: tenant.id, isActive: true },
     });
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+
+    const pinValid = await verifyPin(data.pin, employee.pinHash);
+    if (!pinValid) return NextResponse.json({ error: "Incorrect PIN. Please try again." }, { status: 401 });
 
     const todayStart = startOfDay(new Date());
     const ts = new Date(data.timestamp);
