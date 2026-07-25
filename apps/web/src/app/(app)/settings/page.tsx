@@ -16,39 +16,49 @@ export default function SettingsPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Kiosk PIN management
-  interface EmpRow { id: string; firstName: string; lastName: string; email: string | null; }
-  const [employees, setEmployees] = useState<EmpRow[]>([]);
-  const [empsLoading, setEmpsLoading] = useState(true);
-  const [pinValues, setPinValues] = useState<Record<string, string>>({});
-  const [pinVisible, setPinVisible] = useState<Record<string, boolean>>({});
-  const [pinSaving, setPinSaving] = useState<Record<string, boolean>>({});
-  const [pinMsg, setPinMsg] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  // My Kiosk PIN (admin's own kiosk access)
+  const [kioskPinStatus, setKioskPinStatus] = useState<"loading" | "set" | "unset">("loading");
+  const [kioskPin, setKioskPin] = useState("");
+  const [kioskPinVisible, setKioskPinVisible] = useState(false);
+  const [kioskPinSaving, setKioskPinSaving] = useState(false);
+  const [kioskPinRemoving, setKioskPinRemoving] = useState(false);
+  const [kioskPinMsg, setKioskPinMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    fetch("/api/employees")
+    fetch("/api/settings/kiosk-pin")
       .then((r) => r.json())
-      .then((data) => setEmployees(Array.isArray(data) ? data : []))
-      .finally(() => setEmpsLoading(false));
+      .then((d) => setKioskPinStatus(d.hasPin ? "set" : "unset"))
+      .catch(() => setKioskPinStatus("unset"));
   }, []);
 
-  async function savePin(empId: string) {
-    const pin = pinValues[empId] ?? "";
-    if (pin.length !== 4) return;
-    setPinSaving((s) => ({ ...s, [empId]: true }));
-    setPinMsg((m) => ({ ...m, [empId]: undefined as any }));
-    const res = await fetch(`/api/employees/${empId}`, {
-      method: "PATCH",
+  async function saveKioskPin() {
+    if (kioskPin.length !== 4) return;
+    setKioskPinSaving(true);
+    setKioskPinMsg(null);
+    const res = await fetch("/api/settings/kiosk-pin", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ pin: kioskPin }),
     });
-    setPinSaving((s) => ({ ...s, [empId]: false }));
+    setKioskPinSaving(false);
     if (res.ok) {
-      setPinMsg((m) => ({ ...m, [empId]: { type: "success", text: "PIN updated." } }));
-      setPinValues((v) => ({ ...v, [empId]: "" }));
+      setKioskPinStatus("set");
+      setKioskPin("");
+      setKioskPinMsg({ type: "success", text: "Kiosk PIN set. You can now clock in/out at the kiosk." });
     } else {
       const d = await res.json();
-      setPinMsg((m) => ({ ...m, [empId]: { type: "error", text: d.error ?? "Failed to update PIN." } }));
+      setKioskPinMsg({ type: "error", text: d.error ?? "Failed to set PIN." });
+    }
+  }
+
+  async function removeKioskPin() {
+    setKioskPinRemoving(true);
+    setKioskPinMsg(null);
+    const res = await fetch("/api/settings/kiosk-pin", { method: "DELETE" });
+    setKioskPinRemoving(false);
+    if (res.ok) {
+      setKioskPinStatus("unset");
+      setKioskPinMsg({ type: "success", text: "Kiosk access removed." });
     }
   }
 
@@ -323,81 +333,84 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Kiosk Employee PINs */}
+      {/* My Kiosk PIN */}
       <div className="card p-6 space-y-4">
         <div>
-          <h2 className="font-semibold text-gray-900">Kiosk Employee PINs</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Set or reset the 4-digit PIN each employee uses to clock in and out at the kiosk.</p>
+          <h2 className="font-semibold text-gray-900">My Kiosk PIN</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Set a personal 4-digit PIN so you can clock in and out at the kiosk terminal alongside your employees.
+          </p>
         </div>
 
-        {empsLoading ? (
-          <div className="flex justify-center py-6">
+        {kioskPinStatus === "loading" ? (
+          <div className="flex justify-center py-4">
             <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
           </div>
-        ) : employees.length === 0 ? (
-          <p className="text-sm text-gray-400 py-4 text-center">
-            No employees yet.{" "}
-            <a href="/employees" className="underline" style={{ color: brandColor }}>Add employees</a> first.
-          </p>
         ) : (
-          <div className="divide-y divide-gray-50">
-            {employees.map((emp) => {
-              const pin = pinValues[emp.id] ?? "";
-              const saving = pinSaving[emp.id] ?? false;
-              const msg = pinMsg[emp.id];
-              const visible = pinVisible[emp.id] ?? false;
-              return (
-                <div key={emp.id} className="py-3 flex items-center gap-4">
-                  {/* Avatar + name */}
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0" style={{ backgroundColor: brandColor }}>
-                    {emp.firstName[0]}{emp.lastName[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{emp.firstName} {emp.lastName}</p>
-                    {emp.email && <p className="text-xs text-gray-400 truncate">{emp.email}</p>}
-                    {msg && (
-                      <p className={`text-xs mt-1 ${msg.type === "success" ? "text-green-600" : "text-red-500"}`}>{msg.text}</p>
-                    )}
-                  </div>
-                  {/* PIN input + save */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="relative">
-                      <KeyRound className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                      <input
-                        type={visible ? "text" : "password"}
-                        inputMode="numeric"
-                        maxLength={4}
-                        placeholder="••••"
-                        value={pin}
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                          setPinValues((prev) => ({ ...prev, [emp.id]: v }));
-                          setPinMsg((m) => ({ ...m, [emp.id]: undefined as any }));
-                        }}
-                        className="pl-8 pr-8 py-1.5 w-28 text-center text-sm font-mono tracking-widest border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-0"
-                        style={{ focusBorderColor: brandColor } as React.CSSProperties}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setPinVisible((v) => ({ ...v, [emp.id]: !v[emp.id] }))}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
-                      >
-                        {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => savePin(emp.id)}
-                      disabled={pin.length !== 4 || saving}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-40 transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: brandColor }}
-                    >
-                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      {saving ? "Saving" : "Set"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-4">
+            {/* Status badge */}
+            <div className="flex items-center gap-3">
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${kioskPinStatus === "set" ? "bg-green-500" : "bg-gray-300"}`} />
+              <p className="text-sm text-gray-700">
+                {kioskPinStatus === "set"
+                  ? "Kiosk PIN is set — you appear on the kiosk terminal."
+                  : "No kiosk PIN set — you cannot currently use the kiosk."}
+              </p>
+            </div>
+
+            {/* PIN input */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-[200px]">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type={kioskPinVisible ? "text" : "password"}
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder={kioskPinStatus === "set" ? "New PIN" : "Enter PIN"}
+                  value={kioskPin}
+                  onChange={(e) => {
+                    setKioskPin(e.target.value.replace(/\D/g, "").slice(0, 4));
+                    setKioskPinMsg(null);
+                  }}
+                  className="w-full pl-9 pr-9 py-2 text-center font-mono tracking-widest text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setKioskPinVisible((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                >
+                  {kioskPinVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button
+                onClick={saveKioskPin}
+                disabled={kioskPin.length !== 4 || kioskPinSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-40 transition-opacity hover:opacity-90"
+                style={{ backgroundColor: brandColor }}
+              >
+                {kioskPinSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {kioskPinStatus === "set" ? "Update PIN" : "Set PIN"}
+              </button>
+            </div>
+
+            {/* Feedback message */}
+            {kioskPinMsg && (
+              <p className={`text-sm px-3 py-2 rounded-lg border ${kioskPinMsg.type === "error" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+                {kioskPinMsg.text}
+              </p>
+            )}
+
+            {/* Remove access */}
+            {kioskPinStatus === "set" && (
+              <button
+                onClick={removeKioskPin}
+                disabled={kioskPinRemoving}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1"
+              >
+                {kioskPinRemoving ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                Remove my kiosk access
+              </button>
+            )}
           </div>
         )}
       </div>
