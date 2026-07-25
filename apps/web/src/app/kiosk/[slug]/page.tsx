@@ -109,17 +109,18 @@ export default function KioskPage() {
     if (pin.length < 4) {
       const next = pin + key;
       setPin(next);
-      if (next.length === 4) setTimeout(identify, 150); // slight delay so last dot shows
+      if (next.length === 4) setTimeout(() => identify(next), 150); // pass value directly to avoid stale closure
     }
   }
 
-  async function identify() {
+  async function identify(pinValue?: string) {
+    const currentPin = pinValue ?? pin;
     setScreen("identifying");
     try {
       const res = await fetch(`/api/kiosk/${slug}/identify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin: currentPin }),
       });
       const data = await res.json();
       if (!res.ok) {
