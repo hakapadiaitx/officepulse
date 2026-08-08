@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { verifyPin } from "@/lib/auth";
 
-const schema = z.object({ pin: z.string().length(4).regex(/^\d{4}$/) });
+const schema = z.object({
+  pin: z.string().length(4).regex(/^\d{4}$/),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
 // Public endpoint — validates the company kiosk PIN and returns employee list.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -18,12 +20,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 
   try {
-    const { pin } = schema.parse(await req.json());
+    const { pin, localDate } = schema.parse(await req.json());
 
     const valid = await verifyPin(pin, tenant.kioskPinHash);
     if (!valid) return NextResponse.json({ error: "Incorrect PIN. Please try again." }, { status: 401 });
 
-    const todayStart = startOfDay(new Date());
+    const todayStart = localDate
+      ? new Date(localDate + "T00:00:00.000Z")
+      : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
     const employees = await prisma.employee.findMany({
       where: { tenantId: tenant.id, isActive: true },
       include: {

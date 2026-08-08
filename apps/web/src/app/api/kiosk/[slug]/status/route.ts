@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 
 // Public endpoint — no session required. Reads status for all employees in a tenant.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
   const tenant = await prisma.tenant.findUnique({ where: { slug } });
   if (!tenant) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
-  const todayStart = startOfDay(new Date());
+  // Use the client's local date so UTC midnight on the server never resets statuses
+  // mid-business-day for users in non-UTC timezones.
+  const localDate = req.nextUrl.searchParams.get("localDate");
+  const todayStart = localDate && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
+    ? new Date(localDate + "T00:00:00.000Z")
+    : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
 
   const employees = await prisma.employee.findMany({
     where: { tenantId: tenant.id, isActive: true },

@@ -74,7 +74,8 @@ export default function KioskPage() {
 
   // Load branding from status endpoint (public, no PIN needed)
   useEffect(() => {
-    fetch(`/api/kiosk/${slug}/status`)
+    const localDate = format(new Date(), "yyyy-MM-dd");
+    fetch(`/api/kiosk/${slug}/status?localDate=${localDate}`)
       .then((r) => r.json())
       .then((d) => setTenant({ tenantName: d.tenantName ?? "", brandColor: d.brandColor ?? "#4f46e5", logoUrl: d.logoUrl ?? null }))
       .catch(() => {});
@@ -88,7 +89,8 @@ export default function KioskPage() {
   }, []);
 
   const refreshEmployees = useCallback(async () => {
-    const res = await fetch(`/api/kiosk/${slug}/status`);
+    const localDate = format(new Date(), "yyyy-MM-dd");
+    const res = await fetch(`/api/kiosk/${slug}/status?localDate=${localDate}`);
     if (res.ok) {
       const d = await res.json();
       setEmployees(d.employees ?? []);
@@ -121,7 +123,7 @@ export default function KioskPage() {
     const res = await fetch(`/api/kiosk/${slug}/unlock`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pinValue }),
+      body: JSON.stringify({ pin: pinValue, localDate: format(new Date(), "yyyy-MM-dd") }),
     });
     const data = await res.json();
     setPinChecking(false);
@@ -176,6 +178,7 @@ export default function KioskPage() {
         employeeId: selected.emp.id,
         pin: empPin,
         timestamp: new Date().toISOString(),
+        localDate: format(new Date(), "yyyy-MM-dd"),
         purpose: purpose || undefined,
       }),
     });
