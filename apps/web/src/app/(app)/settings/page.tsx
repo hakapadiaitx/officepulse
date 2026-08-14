@@ -19,6 +19,7 @@ export default function SettingsPage() {
   // My Kiosk PIN (admin's own kiosk access)
   const [digestEnabled, setDigestEnabled] = useState(false);
   const [digestLoading, setDigestLoading] = useState(false);
+  const [digestError, setDigestError] = useState("");
 
   useEffect(() => {
     fetch("/api/settings/digest")
@@ -29,13 +30,24 @@ export default function SettingsPage() {
 
   async function toggleDigest(enabled: boolean) {
     setDigestLoading(true);
-    const res = await fetch("/api/settings/digest", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    if (res.ok) setDigestEnabled(enabled);
-    setDigestLoading(false);
+    setDigestError("");
+    try {
+      const res = await fetch("/api/settings/digest", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (res.ok) {
+        setDigestEnabled(enabled);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setDigestError(d.error ?? "Failed to update digest setting. Please try again.");
+      }
+    } catch {
+      setDigestError("Network error. Please try again.");
+    } finally {
+      setDigestLoading(false);
+    }
   }
 
   const [kioskPinStatus, setKioskPinStatus] = useState<"loading" | "set" | "unset">("loading");
@@ -459,7 +471,10 @@ export default function SettingsPage() {
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${digestEnabled ? "translate-x-5" : "translate-x-0"}`} />
           </button>
         </div>
-        {digestEnabled && (
+        {digestError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{digestError}</p>
+        )}
+        {digestEnabled && !digestError && (
           <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
             Digest is active — you'll receive a summary email every day at 6 PM UTC.
           </p>
