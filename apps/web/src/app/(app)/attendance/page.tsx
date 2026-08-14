@@ -33,8 +33,12 @@ export default function AttendancePage() {
   const [modal, setModal] = useState<ModalState>(null);
 
   async function fetchStatus() {
-    const res = await fetch("/api/attendance/status");
-    if (res.ok) setEmployees(await res.json());
+    const localDate = format(new Date(), "yyyy-MM-dd");
+    const res = await fetch(`/api/attendance/status?localDate=${localDate}`);
+    if (res.ok) {
+      const data = await res.json();
+      setEmployees(data.employees ?? []);
+    }
     setLoading(false);
   }
 

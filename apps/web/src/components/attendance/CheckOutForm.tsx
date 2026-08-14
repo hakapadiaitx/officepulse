@@ -36,6 +36,7 @@ export function CheckOutForm({ employee, isEndOfDay = false, onClose }: Props) {
         pin,
         checkOutTime: new Date(dateTime).toISOString(),
         isEndOfDay,
+        localDate: format(new Date(), "yyyy-MM-dd"),
         purpose: isEndOfDay ? undefined : purpose,
         notes: notes || undefined,
       }),

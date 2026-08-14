@@ -32,6 +32,7 @@ export function CheckInForm({ employee, isArrival = false, onClose }: Props) {
         employeeId: employee.id,
         pin,
         checkInTime: new Date(dateTime).toISOString(),
+        localDate: format(new Date(), "yyyy-MM-dd"),
       }),
     });
 

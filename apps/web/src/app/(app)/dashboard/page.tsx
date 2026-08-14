@@ -1,79 +1,67 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+"use client";
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { EmployeeStatusList } from "@/components/dashboard/EmployeeStatusList";
-import { startOfDay, endOfDay } from "date-fns";
 
-export const dynamic = "force-dynamic";
+type Status = "not_arrived" | "in" | "out" | "left";
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  const tenantId = (session?.user as any)?.tenantId as string;
+interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  status: Status;
+  lastAction: Date | null;
+  purpose: string | null;
+}
 
-  const todayStart = startOfDay(new Date());
-  const todayEnd = endOfDay(new Date());
+export default function DashboardPage() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [todayMinutes, setTodayMinutes] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const [totalEmployees, employees, completedToday] = await Promise.all([
-    prisma.employee.count({ where: { tenantId, isActive: true } }),
-    prisma.employee.findMany({
-      where: { tenantId, isActive: true },
-      include: {
-        attendanceLogs: {
-          where: { checkInTime: { gte: todayStart } },
-          orderBy: { checkInTime: "desc" },
-          take: 1,
-        },
-      },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    }),
-    prisma.attendanceLog.findMany({
-      where: { tenantId, checkInTime: { gte: todayStart, lte: todayEnd }, checkOutTime: { not: null } },
-    }),
-  ]);
-
-  type Emp = (typeof employees)[number];
-
-  const statusList = employees.map((emp: Emp) => {
-    const log = emp.attendanceLogs[0] ?? null;
-    let status: "not_arrived" | "in" | "out" | "left";
-    let lastAction: Date | null = null;
-    let purpose: string | null = null;
-
-    if (!log) {
-      status = "not_arrived";
-    } else if (!log.checkOutTime) {
-      status = "in";
-      lastAction = log.checkInTime;
-    } else if (log.isEndOfDay) {
-      status = "left";
-      lastAction = log.checkOutTime;
-    } else {
-      status = "out";
-      lastAction = log.checkOutTime;
-      purpose = log.purpose;
+  async function fetchData() {
+    const localDate = format(new Date(), "yyyy-MM-dd");
+    const res = await fetch(`/api/attendance/status?localDate=${localDate}`);
+    if (res.ok) {
+      const data = await res.json();
+      setEmployees(data.employees ?? []);
+      setTodayMinutes(data.todayMinutes ?? 0);
     }
+    setLoading(false);
+  }
 
-    return { id: emp.id, firstName: emp.firstName, lastName: emp.lastName, status, lastAction, purpose };
-  });
+  useEffect(() => {
+    fetchData();
+    const t = setInterval(fetchData, 30000);
+    return () => clearInterval(t);
+  }, []);
 
-  const todayMinutes = completedToday.reduce((sum: number, log: (typeof completedToday)[number]) => {
-    if (!log.checkOutTime) return sum;
-    return sum + Math.round((log.checkOutTime.getTime() - log.checkInTime.getTime()) / 60000);
-  }, 0);
+  const inCount          = employees.filter((e) => e.status === "in").length;
+  const outCount         = employees.filter((e) => e.status === "out").length;
+  const notArrivedCount  = employees.filter((e) => e.status === "not_arrived").length;
+  const leftCount        = employees.filter((e) => e.status === "left").length;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <DashboardStats
-        totalEmployees={totalEmployees}
-        inCount={statusList.filter((e) => e.status === "in").length}
-        outCount={statusList.filter((e) => e.status === "out").length}
-        notArrivedCount={statusList.filter((e) => e.status === "not_arrived").length}
-        leftCount={statusList.filter((e) => e.status === "left").length}
-        todayMinutes={todayMinutes}
-      />
-      <EmployeeStatusList employees={statusList} />
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          <DashboardStats
+            totalEmployees={employees.length}
+            inCount={inCount}
+            outCount={outCount}
+            notArrivedCount={notArrivedCount}
+            leftCount={leftCount}
+            todayMinutes={todayMinutes}
+          />
+          <EmployeeStatusList employees={employees} />
+        </>
+      )}
     </div>
   );
 }

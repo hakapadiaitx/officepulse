@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getTenantId } from "@/lib/session";
 
@@ -8,19 +7,28 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   const tenantId = getTenantId(session)!;
-  const todayStart = startOfDay(new Date());
+  const localDate = req.nextUrl.searchParams.get("localDate");
+  const todayStart = localDate && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
+    ? new Date(localDate + "T00:00:00.000Z")
+    : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
 
-  const employees = await prisma.employee.findMany({
-    where: { tenantId, isActive: true },
-    include: {
-      attendanceLogs: {
-        where: { checkInTime: { gte: todayStart } },
-        orderBy: { checkInTime: "desc" },
-        take: 1,
+  const [employees, completedToday] = await Promise.all([
+    prisma.employee.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        attendanceLogs: {
+          where: { checkInTime: { gte: todayStart } },
+          orderBy: { checkInTime: "desc" },
+          take: 1,
+        },
       },
-    },
-    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-  });
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+    prisma.attendanceLog.findMany({
+      where: { tenantId, checkInTime: { gte: todayStart }, checkOutTime: { not: null } },
+      select: { checkInTime: true, checkOutTime: true },
+    }),
+  ]);
 
   type EmpWithLogs = (typeof employees)[number];
   const statusList = employees.map((emp: EmpWithLogs) => {
@@ -46,5 +54,10 @@ export async function GET(req: NextRequest) {
     return { id: emp.id, firstName: emp.firstName, lastName: emp.lastName, email: emp.email, status, lastAction, purpose };
   });
 
-  return NextResponse.json(statusList);
+  const todayMinutes = completedToday.reduce((sum, log) => {
+    if (!log.checkOutTime) return sum;
+    return sum + Math.round((log.checkOutTime.getTime() - log.checkInTime.getTime()) / 60000);
+  }, 0);
+
+  return NextResponse.json({ employees: statusList, todayMinutes });
 }

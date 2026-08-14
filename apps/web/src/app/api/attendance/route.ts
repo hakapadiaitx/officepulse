@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getTenantId } from "@/lib/session";
 import { verifyPin } from "@/lib/auth";
@@ -10,6 +9,7 @@ const checkOutSchema = z.object({
   pin: z.string().length(4).regex(/^\d{4}$/),
   checkOutTime: z.string().datetime(),
   isEndOfDay: z.boolean().default(false),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   purpose: z.string().max(500).optional(),
   notes: z.string().max(1000).optional(),
 }).refine((d) => d.isEndOfDay || (d.purpose && d.purpose.trim().length > 0), {
@@ -64,12 +64,15 @@ export async function POST(req: NextRequest) {
     const pinValid = await verifyPin(data.pin, employee.pinHash);
     if (!pinValid) return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
 
-    // Find the open session for today
+    const todayStart = data.localDate
+      ? new Date(data.localDate + "T00:00:00.000Z")
+      : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+
     const openSession = await prisma.attendanceLog.findFirst({
       where: {
         employeeId: data.employeeId,
         tenantId,
-        checkInTime: { gte: startOfDay(new Date()) },
+        checkInTime: { gte: todayStart },
         checkOutTime: null,
       },
       orderBy: { checkInTime: "desc" },

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getTenantId } from "@/lib/session";
 import { verifyPin } from "@/lib/auth";
@@ -9,6 +8,7 @@ const schema = z.object({
   employeeId: z.string(),
   pin: z.string().length(4).regex(/^\d{4}$/),
   checkInTime: z.string().datetime(),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // Check IN — employee arrives or returns to office.
@@ -31,12 +31,15 @@ export async function POST(req: NextRequest) {
     const pinValid = await verifyPin(data.pin, employee.pinHash);
     if (!pinValid) return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
 
-    // Block if employee already has an open session today (already checked in)
+    const todayStart = data.localDate
+      ? new Date(data.localDate + "T00:00:00.000Z")
+      : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+
     const openSession = await prisma.attendanceLog.findFirst({
       where: {
         employeeId: data.employeeId,
         tenantId,
-        checkInTime: { gte: startOfDay(new Date()) },
+        checkInTime: { gte: todayStart },
         checkOutTime: null,
       },
     });
