@@ -73,32 +73,84 @@ export default function ReportsPage() {
     return `${format(s, "MMM d")} – ${format(e, "MMM d, yyyy")}`;
   }
 
-  function downloadCSV() {
+  async function exportExcel() {
     if (!data) return;
-    const rows = [
-      ["Employee", "Days Present", "Sessions", "Hours In Office", "Hours Out of Office", "Total Hours"],
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    const cols = (widths: number[]) => widths.map((wch) => ({ wch }));
+
+    // Sheet 1 — Summary
+    const ws1 = XLSX.utils.aoa_to_sheet([
+      ["OfficePulse — Attendance Report"],
+      [],
+      ["Period",               data.period.charAt(0).toUpperCase() + data.period.slice(1)],
+      ["From",                 format(new Date(data.start), "MMM d, yyyy")],
+      ["To",                   format(new Date(data.end),   "MMM d, yyyy")],
+      [],
+      ["Active Employees",     data.summary.totalEmployees],
+      ["Total Sessions",       data.summary.totalSessions],
+      ["Total In-Office (h)",  +(data.summary.totalInMinutes  / 60).toFixed(2)],
+      ["Total Out-of-Office (h)", +(data.summary.totalOutMinutes / 60).toFixed(2)],
+    ]);
+    ws1["!cols"] = cols([26, 20]);
+    XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+
+    // Sheet 2 — Employee Breakdown
+    const ws2 = XLSX.utils.aoa_to_sheet([
+      ["Employee", "Days Present", "Sessions", "In-Office (h)", "Out-of-Office (h)", "Total (h)"],
       ...data.employeeStats.map((e) => [
         e.name,
         e.daysPresent,
         e.sessions,
-        (e.inMinutes / 60).toFixed(2),
-        (e.outMinutes / 60).toFixed(2),
-        ((e.inMinutes + e.outMinutes) / 60).toFixed(2),
+        +(e.inMinutes / 60).toFixed(2),
+        +(e.outMinutes / 60).toFixed(2),
+        +((e.inMinutes + e.outMinutes) / 60).toFixed(2),
       ]),
+    ]);
+    ws2["!cols"] = cols([24, 14, 10, 14, 18, 10]);
+    XLSX.utils.book_append_sheet(wb, ws2, "Employees");
+
+    // Sheet 3 — Daily Breakdown
+    const ws3 = XLSX.utils.aoa_to_sheet([
+      ["Date", "Employees Present", "In-Office (h)", "Out-of-Office (h)"],
+      ...data.dailyStats.map((d) => [
+        format(new Date(d.date + "T12:00:00"), "EEE, MMM d yyyy"),
+        d.employees,
+        +(d.inMinutes / 60).toFixed(2),
+        +(d.outMinutes / 60).toFixed(2),
+      ]),
+    ]);
+    ws3["!cols"] = cols([22, 18, 14, 18]);
+    XLSX.utils.book_append_sheet(wb, ws3, "Daily");
+
+    // Sheet 4 — Detail (per-employee per-day, useful for payroll)
+    const detailRows: (string | number)[][] = [
+      ["Employee", "Date", "In-Office (h)", "Out-of-Office (h)", "Total (h)"],
     ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `report-${period}-${format(date, "yyyy-MM-dd")}.csv`;
-    a.click();
+    for (const emp of data.employeeStats) {
+      for (const d of emp.dailyStats) {
+        detailRows.push([
+          emp.name,
+          format(new Date(d.date + "T12:00:00"), "EEE, MMM d yyyy"),
+          +(d.inMinutes / 60).toFixed(2),
+          +(d.outMinutes / 60).toFixed(2),
+          +((d.inMinutes + d.outMinutes) / 60).toFixed(2),
+        ]);
+      }
+    }
+    const ws4 = XLSX.utils.aoa_to_sheet(detailRows);
+    ws4["!cols"] = cols([24, 22, 14, 18, 10]);
+    XLSX.utils.book_append_sheet(wb, ws4, "Detail");
+
+    XLSX.writeFile(wb, `officepulse-${period}-${format(date, "yyyy-MM-dd")}.xlsx`);
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <button onClick={downloadCSV} disabled={!data} className="btn-secondary flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" /> Export CSV
+        <button onClick={exportExcel} disabled={!data} className="btn-secondary flex items-center gap-2 text-sm">
+          <Download className="w-4 h-4" /> Export Excel
         </button>
       </div>
 
