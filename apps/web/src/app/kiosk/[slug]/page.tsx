@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
-import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock } from "lucide-react";
+import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import Image from "next/image";
 
 type Status = "not_arrived" | "in" | "out" | "left";
@@ -21,6 +21,16 @@ interface TenantInfo {
   tenantName: string;
   brandColor: string;
   logoUrl: string | null;
+}
+
+interface AttendanceLog {
+  id: string;
+  employeeId: string;
+  checkInTime: string;
+  checkOutTime: string | null;
+  isEndOfDay: boolean;
+  purpose: string | null;
+  notes: string | null;
 }
 
 const statusConfig: Record<Status, { label: string; dot: string; badge: string; text: string }> = {
@@ -48,6 +58,370 @@ function availableActions(status: Status): Action[] {
 
 const NUMPAD = ["1","2","3","4","5","6","7","8","9","⌫","0","✓"] as const;
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function toLocalInput(iso: string) { return format(new Date(iso), "yyyy-MM-dd'T'HH:mm"); }
+function toUtcIso(local: string)   { return new Date(local).toISOString(); }
+
+// ── KioskEditModal ─────────────────────────────────────────────────────────────
+interface SessionRow extends AttendanceLog {
+  dirty: boolean;
+  saving: boolean;
+  error: string;
+}
+
+interface KioskEditModalProps {
+  employee: Employee;
+  todayDate: string;
+  kioskToken: string;
+  brandColor: string;
+  onClose: () => void;
+}
+
+function KioskEditModal({ employee, todayDate, kioskToken, brandColor, onClose }: KioskEditModalProps) {
+  const [date, setDate]           = useState(todayDate);
+  const [sessions, setSessions]   = useState<SessionRow[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [globalError, setGlobalError] = useState("");
+
+  const [showAdd, setShowAdd]       = useState(false);
+  const [newIn, setNewIn]           = useState("");
+  const [newOut, setNewOut]         = useState("");
+  const [newEod, setNewEod]         = useState(false);
+  const [newPurpose, setNewPurpose] = useState("");
+  const [addingNew, setAddingNew]   = useState(false);
+  const [newError, setNewError]     = useState("");
+
+  const authHeader = { "Authorization": `Bearer ${kioskToken}`, "Content-Type": "application/json" };
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    setGlobalError("");
+    try {
+      const res = await fetch(
+        `/api/admin/attendance?employeeId=${employee.id}&date=${date}`,
+        { headers: { Authorization: `Bearer ${kioskToken}` } }
+      );
+      if (!res.ok) throw new Error("Failed to load sessions");
+      const data: AttendanceLog[] = await res.json();
+      setSessions(data.map((l) => ({ ...l, dirty: false, saving: false, error: "" })));
+    } catch {
+      setGlobalError("Could not load sessions.");
+    } finally {
+      setLoading(false);
+    }
+  }, [employee.id, date, kioskToken]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  function updateField(id: string, field: string, value: string | boolean | null) {
+    setSessions((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value, dirty: true, error: "" } : s));
+  }
+
+  async function saveSession(id: string) {
+    const s = sessions.find((x) => x.id === id)!;
+    setSessions((prev) => prev.map((x) => x.id === id ? { ...x, saving: true, error: "" } : x));
+    try {
+      const res = await fetch(`/api/admin/attendance/${id}`, {
+        method: "PATCH",
+        headers: authHeader,
+        body: JSON.stringify({
+          checkInTime:  toUtcIso(toLocalInput(s.checkInTime)),
+          checkOutTime: s.checkOutTime ? toUtcIso(toLocalInput(s.checkOutTime)) : null,
+          isEndOfDay:   s.isEndOfDay,
+          purpose:      s.purpose,
+          notes:        s.notes,
+        }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Save failed"); }
+      const updated: AttendanceLog = await res.json();
+      setSessions((prev) => prev.map((x) => x.id === id ? { ...updated, dirty: false, saving: false, error: "" } : x));
+    } catch (err: unknown) {
+      setSessions((prev) => prev.map((x) => x.id === id ? { ...x, saving: false, error: (err as Error).message } : x));
+    }
+  }
+
+  async function deleteSession(id: string) {
+    if (!confirm("Delete this session?")) return;
+    setSessions((prev) => prev.map((x) => x.id === id ? { ...x, saving: true } : x));
+    try {
+      const res = await fetch(`/api/admin/attendance/${id}`, { method: "DELETE", headers: authHeader });
+      if (!res.ok) throw new Error("Delete failed");
+      setSessions((prev) => prev.filter((x) => x.id !== id));
+    } catch (err: unknown) {
+      setSessions((prev) => prev.map((x) => x.id === id ? { ...x, saving: false, error: (err as Error).message } : x));
+    }
+  }
+
+  async function addSession() {
+    setNewError("");
+    if (!newIn) { setNewError("Check-in time is required."); return; }
+    if (newOut && newOut <= newIn) { setNewError("Check-out must be after check-in."); return; }
+    setAddingNew(true);
+    try {
+      const res = await fetch("/api/admin/attendance", {
+        method: "POST",
+        headers: authHeader,
+        body: JSON.stringify({
+          employeeId:   employee.id,
+          checkInTime:  toUtcIso(newIn),
+          checkOutTime: newOut ? toUtcIso(newOut) : null,
+          isEndOfDay:   newOut ? newEod : false,
+          purpose:      newOut && !newEod ? newPurpose : null,
+        }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Add failed"); }
+      const created: AttendanceLog = await res.json();
+      setSessions((prev) =>
+        [...prev, { ...created, dirty: false, saving: false, error: "" }]
+          .sort((a, b) => new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime())
+      );
+      setNewIn(""); setNewOut(""); setNewEod(false); setNewPurpose(""); setShowAdd(false);
+    } catch (err: unknown) {
+      setNewError((err as Error).message);
+    } finally {
+      setAddingNew(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Edit Attendance</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{employee.firstName} {employee.lastName}</p>
+          </div>
+          <button onClick={onClose} className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Date picker */}
+        <div className="px-6 py-3 border-b border-gray-50 flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-500">Date</span>
+          <button
+            onClick={() => {
+              const d = new Date(date + "T12:00:00Z");
+              d.setUTCDate(d.getUTCDate() - 1);
+              setDate(d.toISOString().slice(0, 10));
+            }}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <input
+            type="date"
+            value={date}
+            max={todayDate}
+            onChange={(e) => setDate(e.target.value)}
+            className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            style={{ colorScheme: "light" }}
+          />
+          <button
+            onClick={() => {
+              const d = new Date(date + "T12:00:00Z");
+              d.setUTCDate(d.getUTCDate() + 1);
+              const next = d.toISOString().slice(0, 10);
+              if (next <= todayDate) setDate(next);
+            }}
+            disabled={date >= todayDate}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors disabled:opacity-30"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Sessions list */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {globalError && <p className="text-sm text-red-500 text-center">{globalError}</p>}
+
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${brandColor}40`, borderTopColor: "transparent" }} />
+            </div>
+          ) : sessions.length === 0 && !showAdd ? (
+            <p className="text-sm text-gray-400 text-center py-8">No sessions for this date.</p>
+          ) : null}
+
+          {sessions.map((s, i) => (
+            <div key={s.id} className="rounded-2xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Session {i + 1}</span>
+                <button
+                  onClick={() => deleteSession(s.id)}
+                  disabled={s.saving}
+                  className="p-2 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Check-in</label>
+                  <input
+                    type="datetime-local"
+                    value={toLocalInput(s.checkInTime)}
+                    onChange={(e) => updateField(s.id, "checkInTime", e.target.value ? toUtcIso(e.target.value) : s.checkInTime)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Check-out</label>
+                  <input
+                    type="datetime-local"
+                    value={s.checkOutTime ? toLocalInput(s.checkOutTime) : ""}
+                    onChange={(e) => updateField(s.id, "checkOutTime", e.target.value ? toUtcIso(e.target.value) : null)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+              </div>
+
+              {s.checkOutTime && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-2.5 text-sm text-gray-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={s.isEndOfDay}
+                      onChange={(e) => updateField(s.id, "isEndOfDay", e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    Left for the day
+                  </label>
+                  {!s.isEndOfDay && (
+                    <input
+                      type="text"
+                      placeholder="Reason (e.g. lunch)"
+                      value={s.purpose ?? ""}
+                      onChange={(e) => updateField(s.id, "purpose", e.target.value || null)}
+                      className="flex-1 min-w-[120px] text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  )}
+                </div>
+              )}
+
+              {s.error && <p className="text-xs text-red-500">{s.error}</p>}
+
+              {s.dirty && (
+                <button
+                  onClick={() => saveSession(s.id)}
+                  disabled={s.saving}
+                  className="flex items-center gap-2 text-sm px-4 py-2.5 text-white rounded-xl font-semibold disabled:opacity-50 transition-colors"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  {s.saving ? (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Save changes
+                </button>
+              )}
+            </div>
+          ))}
+
+          {/* Add session */}
+          {showAdd ? (
+            <div className="rounded-2xl border-2 border-dashed p-4 space-y-3" style={{ borderColor: brandColor + "60" }}>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: brandColor }}>New Session</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Check-in *</label>
+                  <input
+                    type="datetime-local"
+                    value={newIn}
+                    onChange={(e) => setNewIn(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Check-out</label>
+                  <input
+                    type="datetime-local"
+                    value={newOut}
+                    onChange={(e) => setNewOut(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+              </div>
+              {newOut && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-2.5 text-sm text-gray-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newEod}
+                      onChange={(e) => setNewEod(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    Left for the day
+                  </label>
+                  {!newEod && (
+                    <input
+                      type="text"
+                      placeholder="Reason (e.g. lunch)"
+                      value={newPurpose}
+                      onChange={(e) => setNewPurpose(e.target.value)}
+                      className="flex-1 min-w-[120px] text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  )}
+                </div>
+              )}
+              {newError && <p className="text-xs text-red-500">{newError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={addSession}
+                  disabled={addingNew}
+                  className="flex items-center gap-2 text-sm px-4 py-2.5 text-white rounded-xl font-semibold disabled:opacity-50 transition-colors"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  {addingNew ? (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Add Session
+                </button>
+                <button
+                  onClick={() => { setShowAdd(false); setNewError(""); }}
+                  className="text-sm px-4 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            !loading && (
+              <button
+                onClick={() => setShowAdd(true)}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Session
+              </button>
+            )
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Kiosk Page ────────────────────────────────────────────────────────────
+
 export default function KioskPage() {
   const { slug } = useParams<{ slug: string }>();
 
@@ -59,6 +433,7 @@ export default function KioskPage() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinChecking, setPinChecking] = useState(false);
+  const [kioskToken, setKioskToken] = useState("");
 
   // Employee list
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -72,14 +447,18 @@ export default function KioskPage() {
   const [modalError, setModalError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Admin correction modal
+  const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+
+  const todayDate = format(new Date(), "yyyy-MM-dd");
+
   // Load branding from status endpoint (public, no PIN needed)
   useEffect(() => {
-    const localDate = format(new Date(), "yyyy-MM-dd");
-    fetch(`/api/kiosk/${slug}/status?localDate=${localDate}`)
+    fetch(`/api/kiosk/${slug}/status?localDate=${todayDate}`)
       .then((r) => r.json())
       .then((d) => setTenant({ tenantName: d.tenantName ?? "", brandColor: d.brandColor ?? "#4f46e5", logoUrl: d.logoUrl ?? null }))
       .catch(() => {});
-  }, [slug]);
+  }, [slug, todayDate]);
 
   // Live clock
   useEffect(() => {
@@ -89,8 +468,7 @@ export default function KioskPage() {
   }, []);
 
   const refreshEmployees = useCallback(async () => {
-    const localDate = format(new Date(), "yyyy-MM-dd");
-    const res = await fetch(`/api/kiosk/${slug}/status?localDate=${localDate}`);
+    const res = await fetch(`/api/kiosk/${slug}/status?localDate=${format(new Date(), "yyyy-MM-dd")}`);
     if (res.ok) {
       const d = await res.json();
       setEmployees(d.employees ?? []);
@@ -134,6 +512,7 @@ export default function KioskPage() {
     }
     setTenant({ tenantName: data.tenantName, brandColor: data.brandColor, logoUrl: data.logoUrl });
     setEmployees(data.employees ?? []);
+    setKioskToken(data.kioskToken ?? "");
     setPin("");
     setUnlocked(true);
   }
@@ -144,6 +523,8 @@ export default function KioskPage() {
     setPinError("");
     setSelected(null);
     setSearch("");
+    setKioskToken("");
+    setEditEmployee(null);
   }
 
   // --- Action modal ---
@@ -337,13 +718,22 @@ export default function KioskPage() {
               const cfg = statusConfig[emp.status];
               const actions = availableActions(emp.status);
               return (
-                <div key={emp.id} className="card p-5 flex flex-col gap-3">
+                <div key={emp.id} className="card p-5 flex flex-col gap-3 relative">
+                  {/* Admin correction button — top-right corner */}
+                  <button
+                    onClick={() => setEditEmployee(emp)}
+                    title="Edit attendance records"
+                    className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
                       style={{ backgroundColor: brandColor }}>
                       {emp.firstName[0]}{emp.lastName[0]}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 pr-6">
                       <p className="font-semibold text-gray-900 truncate">{emp.firstName} {emp.lastName}</p>
                       {emp.purpose && emp.status === "out" && <p className="text-xs text-gray-400 truncate">{emp.purpose}</p>}
                       {emp.lastAction && (
@@ -447,6 +837,17 @@ export default function KioskPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Admin correction modal */}
+      {editEmployee && kioskToken && (
+        <KioskEditModal
+          employee={editEmployee}
+          todayDate={todayDate}
+          kioskToken={kioskToken}
+          brandColor={brandColor}
+          onClose={() => { setEditEmployee(null); refreshEmployees(); }}
+        />
       )}
     </div>
   );

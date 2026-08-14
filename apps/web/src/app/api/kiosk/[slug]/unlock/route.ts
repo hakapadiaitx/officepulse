@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import { verifyPin } from "@/lib/auth";
 
@@ -58,11 +59,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       };
     });
 
+    // Issue a short-lived token so the kiosk can call admin correction routes
+    // without a NextAuth session. requireAuth() accepts this same JWT format.
+    const kioskToken = jwt.sign(
+      { tenantId: tenant.id, tenantSlug: slug, role: "OWNER" },
+      process.env.NEXTAUTH_SECRET!,
+      { subject: tenant.id, expiresIn: "12h" }
+    );
+
     return NextResponse.json({
       tenantName: tenant.name,
       brandColor: tenant.brandColor,
       logoUrl: tenant.logoUrl ?? null,
       employees: list,
+      kioskToken,
     });
   } catch (err) {
     if (err instanceof z.ZodError) return NextResponse.json({ error: "Invalid PIN format." }, { status: 400 });
