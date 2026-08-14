@@ -314,6 +314,123 @@ export async function sendCancellationEmail(params: CancellationEmailParams): Pr
   if (error) console.error("[email] Cancellation email failed:", error);
 }
 
+export interface DigestEmailParams {
+  to: string;
+  adminFirstName: string;
+  companyName: string;
+  date: string; // e.g. "Thursday, Aug 13 2026"
+  stats: { inCount: number; outCount: number; notArrivedCount: number; leftCount: number; totalMinutes: number };
+  employees: { name: string; status: "in" | "out" | "not_arrived" | "left"; lastAction: string | null; purpose: string | null }[];
+  dashboardUrl: string;
+}
+
+function digestHtml(p: DigestEmailParams): string {
+  const statusLabel: Record<string, string> = { in: "At Work", out: "Out of Office", not_arrived: "Not Arrived", left: "Left for Day" };
+  const statusColor: Record<string, string> = { in: "#16a34a", out: "#ea580c", not_arrived: "#9ca3af", left: "#6b7280" };
+  const statusBg:    Record<string, string> = { in: "#dcfce7", out: "#ffedd5", not_arrived: "#f3f4f6", left: "#f3f4f6" };
+
+  const totalHours = (p.stats.totalMinutes / 60).toFixed(1);
+
+  const statBoxes = [
+    { label: "At Work",       value: p.stats.inCount,          color: "#16a34a", bg: "#dcfce7" },
+    { label: "Not Arrived",   value: p.stats.notArrivedCount,  color: "#6b7280", bg: "#f3f4f6" },
+    { label: "Out of Office", value: p.stats.outCount,         color: "#ea580c", bg: "#ffedd5" },
+    { label: "Left for Day",  value: p.stats.leftCount,        color: "#6b7280", bg: "#f3f4f6" },
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Daily Attendance Digest</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+
+        <!-- Header -->
+        <tr><td style="background:#4f46e5;padding:28px 40px;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">OfficePulse</h1>
+          <p style="margin:4px 0 0;color:#c7d2fe;font-size:13px;">Daily Attendance Digest · ${p.companyName}</p>
+        </td></tr>
+
+        <!-- Date bar -->
+        <tr><td style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:14px 40px;">
+          <p style="margin:0;font-size:14px;color:#6b7280;">
+            <strong style="color:#111827;">${p.date}</strong> &nbsp;·&nbsp; ${totalHours}h tracked today
+          </p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:32px 40px;">
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;">Hi ${p.adminFirstName}, here's today's attendance summary.</p>
+
+          <!-- Stat boxes -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr>
+              ${statBoxes.map(s => `
+              <td width="25%" style="padding:0 4px 0 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:${s.bg};border-radius:8px;">
+                  <tr><td style="padding:14px;text-align:center;">
+                    <p style="margin:0;font-size:22px;font-weight:700;color:${s.color};">${s.value}</p>
+                    <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">${s.label}</p>
+                  </td></tr>
+                </table>
+              </td>`).join("")}
+            </tr>
+          </table>
+
+          <!-- Employee list -->
+          <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Employee Status</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            ${p.employees.map((emp, i) => `
+            <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+              <td style="padding:10px 16px;font-size:13px;color:#111827;font-weight:500;">${emp.name}</td>
+              <td style="padding:10px 16px;text-align:right;">
+                <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${statusBg[emp.status]};color:${statusColor[emp.status]};">
+                  ${statusLabel[emp.status]}
+                </span>
+              </td>
+            </tr>`).join("")}
+          </table>
+
+          <!-- CTA -->
+          <table cellpadding="0" cellspacing="0" style="margin:28px 0 0;">
+            <tr><td style="background:#4f46e5;border-radius:8px;">
+              <a href="${p.dashboardUrl}" style="display:inline-block;padding:12px 24px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
+                View live dashboard →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
+            OfficePulse · <a href="${p.dashboardUrl}/settings" style="color:#9ca3af;">Manage digest settings</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendDailyDigest(params: DigestEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("[email] RESEND_API_KEY not configured — skipping daily digest");
+    return;
+  }
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const { error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: `Attendance digest · ${params.date} · ${params.companyName}`,
+    html: digestHtml(params),
+  });
+  if (error) console.error("[email] Daily digest failed:", error);
+}
+
 export async function sendInternalNotification(params: NotificationEmailParams): Promise<void> {
   const resend = getResend();
   const notifyEmail = process.env.NOTIFICATION_EMAIL;

@@ -49,6 +49,7 @@ model Tenant {
   currentPlan          String?
   billingInterval      String             @default("monthly")
   kioskPinHash         String?
+  digestEnabled        Boolean            @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   planId               String?

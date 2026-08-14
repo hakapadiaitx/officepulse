@@ -1,5 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm ci --legacy-peer-deps"
+  "installCommand": "npm ci --legacy-peer-deps",
+  "crons": [
+    {
+      "path": "/api/cron/daily-digest",
+      "schedule": "0 18 * * *"
+    }
+  ]
 }

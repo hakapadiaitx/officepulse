@@ -1,0 +1,1 @@
+ALTER TABLE "Tenant" ADD COLUMN "digestEnabled" BOOLEAN NOT NULL DEFAULT false;

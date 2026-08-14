@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
@@ -17,6 +17,27 @@ export default function SettingsPage() {
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // My Kiosk PIN (admin's own kiosk access)
+  const [digestEnabled, setDigestEnabled] = useState(false);
+  const [digestLoading, setDigestLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/digest")
+      .then((r) => r.json())
+      .then((d) => setDigestEnabled(d.enabled ?? false))
+      .catch(() => {});
+  }, []);
+
+  async function toggleDigest(enabled: boolean) {
+    setDigestLoading(true);
+    const res = await fetch("/api/settings/digest", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    if (res.ok) setDigestEnabled(enabled);
+    setDigestLoading(false);
+  }
+
   const [kioskPinStatus, setKioskPinStatus] = useState<"loading" | "set" | "unset">("loading");
   const [kioskPin, setKioskPin] = useState("");
   const [kioskPinVisible, setKioskPinVisible] = useState(false);
@@ -412,6 +433,36 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Daily Digest */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Mail className="w-4 h-4 text-gray-500" />
+              <h2 className="font-semibold text-gray-900">Daily Digest Email</h2>
+            </div>
+            <p className="text-sm text-gray-500">
+              Receive a daily attendance summary at 6 PM UTC. Sent to <strong>{user?.email}</strong>.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={digestEnabled}
+            onClick={() => toggleDigest(!digestEnabled)}
+            disabled={digestLoading}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${digestEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+            style={digestEnabled ? { backgroundColor: brandColor } : undefined}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${digestEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+        {digestEnabled && (
+          <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            Digest is active — you'll receive a summary email every day at 6 PM UTC.
+          </p>
         )}
       </div>
 
