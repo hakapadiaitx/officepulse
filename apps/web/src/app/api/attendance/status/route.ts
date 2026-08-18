@@ -8,11 +8,13 @@ export async function GET(req: NextRequest) {
 
   const tenantId = getTenantId(session)!;
   const localDate = req.nextUrl.searchParams.get("localDate");
-  const todayStart = localDate && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
-    ? new Date(localDate + "T00:00:00.000Z")
-    : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+  const dateStr = (localDate && /^\d{4}-\d{2}-\d{2}$/.test(localDate))
+    ? localDate
+    : new Date().toISOString().slice(0, 10);
 
-  const [employees, completedToday] = await Promise.all([
+  const todayStart = new Date(dateStr + "T00:00:00.000Z");
+
+  const [employees, completedToday, approvedLeaves] = await Promise.all([
     prisma.employee.findMany({
       where: { tenantId, isActive: true },
       include: {
@@ -28,17 +30,28 @@ export async function GET(req: NextRequest) {
       where: { tenantId, checkInTime: { gte: todayStart }, checkOutTime: { not: null } },
       select: { checkInTime: true, checkOutTime: true },
     }),
+    prisma.leaveRequest.findMany({
+      where: {
+        tenantId,
+        status: "APPROVED",
+        startDate: { lte: dateStr },
+        endDate:   { gte: dateStr },
+      },
+      select: { employeeId: true },
+    }),
   ]);
+
+  const onLeaveIds = new Set(approvedLeaves.map((l) => l.employeeId));
 
   type EmpWithLogs = (typeof employees)[number];
   const statusList = employees.map((emp: EmpWithLogs) => {
     const log = emp.attendanceLogs[0] ?? null;
-    let status: "not_arrived" | "in" | "out" | "left";
+    let status: "not_arrived" | "in" | "out" | "left" | "on_leave";
     let lastAction: Date | null = null;
     let purpose: string | null = null;
 
     if (!log) {
-      status = "not_arrived";
+      status = onLeaveIds.has(emp.id) ? "on_leave" : "not_arrived";
     } else if (!log.checkOutTime) {
       status = "in";
       lastAction = log.checkInTime;

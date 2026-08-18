@@ -431,6 +431,79 @@ export async function sendDailyDigest(params: DigestEmailParams): Promise<void> 
   if (error) console.error("[email] Daily digest failed:", error);
 }
 
+export interface LateAlertEmailParams {
+  to: string;
+  adminFirstName: string;
+  companyName: string;
+  date: string;
+  alertTime: string;
+  lateEmployees: { name: string }[];
+  dashboardUrl: string;
+}
+
+function lateAlertHtml(p: LateAlertEmailParams): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Late Arrival Alert</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+        <tr><td style="background:#f59e0b;padding:28px 40px;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">OfficePulse</h1>
+          <p style="margin:4px 0 0;color:#fef3c7;font-size:13px;">Late Arrival Alert · ${p.companyName}</p>
+        </td></tr>
+        <tr><td style="padding:32px 40px;">
+          <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${p.adminFirstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+            It's past <strong>${p.alertTime} UTC</strong> on ${p.date} and the following
+            ${p.lateEmployees.length === 1 ? "employee has" : `${p.lateEmployees.length} employees have`} not yet arrived:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+            ${p.lateEmployees.map((e, i) => `
+            <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
+              <td style="padding:10px 16px;font-size:13px;color:#111827;font-weight:500;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:8px;vertical-align:middle;"></span>
+                ${e.name}
+              </td>
+            </tr>`).join("")}
+          </table>
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#4f46e5;border-radius:8px;">
+              <a href="${p.dashboardUrl}/attendance" style="display:inline-block;padding:12px 24px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
+                View attendance →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
+            OfficePulse · <a href="${p.dashboardUrl}/settings" style="color:#9ca3af;">Manage alert settings</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendLateAlert(params: LateAlertEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("[email] RESEND_API_KEY not configured — skipping late alert");
+    return;
+  }
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const { error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: `⚠️ ${params.lateEmployees.length} employee${params.lateEmployees.length > 1 ? "s" : ""} not yet arrived · ${params.companyName}`,
+    html: lateAlertHtml(params),
+  });
+  if (error) console.error("[email] Late alert email failed:", error);
+}
+
 export async function sendInternalNotification(params: NotificationEmailParams): Promise<void> {
   const resend = getResend();
   const notifyEmail = process.env.NOTIFICATION_EMAIL;

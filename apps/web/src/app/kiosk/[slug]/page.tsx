@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import Image from "next/image";
 
-type Status = "not_arrived" | "in" | "out" | "left";
+type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
 type Action = "arrive" | "checkout" | "return" | "leave";
 
 interface Employee {
@@ -38,6 +38,7 @@ const statusConfig: Record<Status, { label: string; dot: string; badge: string; 
   in:          { label: "At Work",       dot: "bg-green-500",  badge: "bg-green-100",  text: "text-green-700"  },
   out:         { label: "Out of Office", dot: "bg-orange-500", badge: "bg-orange-100", text: "text-orange-700" },
   left:        { label: "Left for Day",  dot: "bg-gray-400",   badge: "bg-gray-100",   text: "text-gray-500"   },
+  on_leave:    { label: "On Leave",      dot: "bg-blue-400",   badge: "bg-blue-50",    text: "text-blue-600"   },
 };
 
 const actionConfig: Record<Action, { label: string; icon: typeof Sun; title: string; subtitle: (n: string) => string; confirm: string; brand: boolean; cls: string }> = {
@@ -53,6 +54,7 @@ function availableActions(status: Status): Action[] {
     case "in":          return ["checkout", "leave"];
     case "out":         return ["return"];
     case "left":        return [];
+    case "on_leave":    return [];
   }
 }
 
@@ -586,6 +588,7 @@ export default function KioskPage() {
     out: employees.filter((e) => e.status === "out").length,
     not_arrived: employees.filter((e) => e.status === "not_arrived").length,
     left: employees.filter((e) => e.status === "left").length,
+    on_leave: employees.filter((e) => e.status === "on_leave").length,
   };
 
   // ── Shared header ──────────────────────────────────────────────────────────
@@ -674,9 +677,9 @@ export default function KioskPage() {
 
       {/* Stats strip */}
       <div className="bg-white border-b border-gray-100 px-6 py-3 flex gap-6 flex-wrap">
-        {(["in","out","not_arrived","left"] as Status[]).map((key) => {
-          const labels: Record<Status,string> = { in:"At Work", out:"Out", not_arrived:"Not Arrived", left:"Left for Day" };
-          const colors: Record<Status,string> = { in:"text-green-600", out:"text-orange-600", not_arrived:"text-gray-500", left:"text-gray-400" };
+        {(["in","out","not_arrived","on_leave","left"] as Status[]).map((key) => {
+          const labels: Record<Status,string> = { in:"At Work", out:"Out", not_arrived:"Not Arrived", left:"Left for Day", on_leave:"On Leave" };
+          const colors: Record<Status,string> = { in:"text-green-600", out:"text-orange-600", not_arrived:"text-gray-500", left:"text-gray-400", on_leave:"text-blue-500" };
           return (
             <div key={key} className="flex items-center gap-2">
               <span className={`text-xl font-bold ${colors[key]}`}>{counts[key]}</span>
@@ -750,6 +753,9 @@ export default function KioskPage() {
                     {cfg.label}
                   </span>
 
+                  {emp.status === "on_leave" && (
+                    <p className="text-xs text-blue-500 italic">On approved leave</p>
+                  )}
                   {actions.length > 0 ? (
                     <div className="flex gap-2 flex-wrap">
                       {actions.map((action) => {

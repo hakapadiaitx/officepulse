@@ -2,16 +2,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Clock, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Clock, BarChart3, Settings, LogOut, CalendarDays } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/attendance", label: "Attendance", icon: Clock },
-  { href: "/employees", label: "Employees", icon: Users },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard",  label: "Dashboard",      icon: LayoutDashboard },
+  { href: "/attendance", label: "Attendance",      icon: Clock          },
+  { href: "/employees",  label: "Employees",       icon: Users          },
+  { href: "/leaves",     label: "Leave Requests",  icon: CalendarDays   },
+  { href: "/reports",    label: "Reports",         icon: BarChart3      },
+  { href: "/settings",   label: "Settings",        icon: Settings       },
 ];
 
 export function Sidebar() {

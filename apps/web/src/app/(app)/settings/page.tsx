@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
@@ -16,7 +16,48 @@ export default function SettingsPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // My Kiosk PIN (admin's own kiosk access)
+  // Late arrival alert
+  const [lateAlertEnabled, setLateAlertEnabled] = useState(false);
+  const [lateAlertTime, setLateAlertTime]       = useState("09:30");
+  const [lateAlertLoading, setLateAlertLoading] = useState(false);
+  const [lateAlertError, setLateAlertError]     = useState("");
+  const [lateAlertSaved, setLateAlertSaved]     = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/late-alert")
+      .then((r) => r.json())
+      .then((d) => { setLateAlertEnabled(d.enabled ?? false); setLateAlertTime(d.time ?? "09:30"); })
+      .catch(() => {});
+  }, []);
+
+  async function saveLateAlert(enabled: boolean, time?: string) {
+    setLateAlertLoading(true);
+    setLateAlertError("");
+    setLateAlertSaved(false);
+    try {
+      const res = await fetch("/api/settings/late-alert", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, time: time ?? lateAlertTime }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setLateAlertEnabled(d.enabled);
+        setLateAlertTime(d.time);
+        setLateAlertSaved(true);
+        setTimeout(() => setLateAlertSaved(false), 3000);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setLateAlertError(d.error ?? "Failed to save. Please try again.");
+      }
+    } catch {
+      setLateAlertError("Network error. Please try again.");
+    } finally {
+      setLateAlertLoading(false);
+    }
+  }
+
+  // Daily digest
   const [digestEnabled, setDigestEnabled] = useState(false);
   const [digestLoading, setDigestLoading] = useState(false);
   const [digestError, setDigestError] = useState("");
@@ -445,6 +486,68 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Late Arrival Alerts */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Bell className="w-4 h-4 text-gray-500" />
+              <h2 className="font-semibold text-gray-900">Late Arrival Alert</h2>
+            </div>
+            <p className="text-sm text-gray-500">
+              Get an email alert when employees haven't arrived by a set time. Sent to <strong>{user?.email}</strong>.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={lateAlertEnabled}
+            onClick={() => saveLateAlert(!lateAlertEnabled)}
+            disabled={lateAlertLoading}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${lateAlertEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+            style={lateAlertEnabled ? { backgroundColor: brandColor } : undefined}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${lateAlertEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+
+        {lateAlertEnabled && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-700 whitespace-nowrap">Alert time (UTC)</label>
+            <input
+              type="time"
+              value={lateAlertTime}
+              onChange={(e) => setLateAlertTime(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button
+              onClick={() => saveLateAlert(true, lateAlertTime)}
+              disabled={lateAlertLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: brandColor }}
+            >
+              {lateAlertLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              Save
+            </button>
+          </div>
+        )}
+
+        {lateAlertError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{lateAlertError}</p>
+        )}
+        {lateAlertSaved && !lateAlertError && (
+          <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            {lateAlertEnabled
+              ? `Alert active — you'll be notified at ${lateAlertTime} UTC if anyone hasn't arrived.`
+              : "Late arrival alerts disabled."}
+          </p>
+        )}
+        {lateAlertEnabled && !lateAlertSaved && !lateAlertError && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Alert time is in UTC. Convert your local time: e.g. 9:30 AM IST = 04:00 UTC, 9:30 AM GMT = 09:30 UTC.
+          </p>
         )}
       </div>
 
