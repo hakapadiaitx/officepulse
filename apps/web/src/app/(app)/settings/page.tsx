@@ -6,6 +6,48 @@ import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAler
 import { useState, useRef, useEffect } from "react";
 import { BRAND_COLORS } from "@/lib/brand";
 
+function TestEmailButton({ userEmail }: { userEmail?: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  async function send() {
+    setStatus("sending");
+    setMsg("");
+    try {
+      const res = await fetch("/api/settings/test-email", { method: "POST" });
+      const d = await res.json();
+      if (res.ok) {
+        setStatus("ok");
+        setMsg(`Sent! Check ${d.to} — delivered from ${d.from}`);
+      } else {
+        setStatus("error");
+        setMsg(d.error ?? "Unknown error");
+      }
+    } catch {
+      setStatus("error");
+      setMsg("Network error");
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={send}
+        disabled={status === "sending"}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+      >
+        {status === "sending" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+        {status === "sending" ? "Sending…" : "Send Test Email"}
+      </button>
+      {msg && (
+        <p className={`text-xs px-3 py-2 rounded-lg border ${status === "error" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: session, update: updateSession } = useSession();
   const user = session?.user as any;
@@ -514,6 +556,15 @@ export default function SettingsPage() {
             Alert is active — you'll receive an email at 9 AM UTC if any employees haven't arrived.
           </p>
         )}
+      </div>
+
+      {/* Email deliverability test */}
+      <div className="card p-6 space-y-3">
+        <div>
+          <h2 className="font-semibold text-gray-900">Email Delivery Test</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Send a test email to <strong>{user?.email}</strong> to verify your Resend configuration.</p>
+        </div>
+        <TestEmailButton userEmail={user?.email} />
       </div>
 
       {/* Daily Digest */}
