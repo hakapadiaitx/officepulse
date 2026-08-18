@@ -3,22 +3,19 @@ import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { sendLateAlert } from "@/lib/email";
 
-// Runs every 15 minutes via Vercel Cron.
-// Fires an alert for any tenant whose lateAlertTime falls within the current
-// 15-minute window, and hasn't already been alerted today.
+// Runs once daily at 09:00 UTC via Vercel Cron.
+// Sends a late-arrival alert for every tenant that has it enabled
+// and has at least one employee who hasn't arrived today.
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const todayUtc = now.toISOString().slice(0, 10);
+  const todayUtc = new Date().toISOString().slice(0, 10);
   const dateLabel = format(new Date(todayUtc + "T12:00:00.000Z"), "EEEE, MMM d yyyy");
   const todayStart = new Date(todayUtc + "T00:00:00.000Z");
 
-  // Fetch tenants with alert enabled that haven't been notified today
   const tenants = await prisma.tenant.findMany({
     where: {
       lateAlertEnabled: true,
@@ -50,14 +47,6 @@ export async function GET(req: NextRequest) {
   let errors = 0;
 
   for (const tenant of tenants) {
-    // Check if current time is within the 15-minute window after alert time
-    const [h, m] = tenant.lateAlertTime.split(":").map(Number);
-    const alertMinutes = h * 60 + m;
-    if (nowMinutes < alertMinutes || nowMinutes >= alertMinutes + 15) {
-      skipped++;
-      continue;
-    }
-
     const owner = tenant.users[0];
     if (!owner) { skipped++; continue; }
 
@@ -65,12 +54,13 @@ export async function GET(req: NextRequest) {
       .filter((e) => e.attendanceLogs.length === 0)
       .map((e) => ({ name: `${e.firstName} ${e.lastName}` }));
 
-    if (lateEmployees.length === 0) {
-      // Everyone arrived — mark as sent so we don't re-check
-      await prisma.tenant.update({ where: { id: tenant.id }, data: { lateAlertSentDate: todayUtc } });
-      skipped++;
-      continue;
-    }
+    // Mark as sent even if everyone arrived, to prevent double-sends
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { lateAlertSentDate: todayUtc },
+    });
+
+    if (lateEmployees.length === 0) { skipped++; continue; }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.vercel.app";
 
@@ -80,11 +70,10 @@ export async function GET(req: NextRequest) {
         adminFirstName: owner.firstName,
         companyName: tenant.name,
         date: dateLabel,
-        alertTime: tenant.lateAlertTime,
+        alertTime: "09:00 UTC",
         lateEmployees,
         dashboardUrl: appUrl,
       });
-      await prisma.tenant.update({ where: { id: tenant.id }, data: { lateAlertSentDate: todayUtc } });
       sent++;
     } catch (err) {
       console.error(`[cron/late-alert] Failed for tenant ${tenant.id}:`, err);
@@ -93,5 +82,5 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(`[cron/late-alert] Done — ${sent} sent, ${skipped} skipped, ${errors} errors`);
-  return NextResponse.json({ sent, skipped, errors, nowUtc: `${String(now.getUTCHours()).padStart(2,"0")}:${String(now.getUTCMinutes()).padStart(2,"0")}` });
+  return NextResponse.json({ sent, skipped, errors, date: todayUtc });
 }

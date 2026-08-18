@@ -18,34 +18,27 @@ export default function SettingsPage() {
 
   // Late arrival alert
   const [lateAlertEnabled, setLateAlertEnabled] = useState(false);
-  const [lateAlertTime, setLateAlertTime]       = useState("09:30");
   const [lateAlertLoading, setLateAlertLoading] = useState(false);
   const [lateAlertError, setLateAlertError]     = useState("");
-  const [lateAlertSaved, setLateAlertSaved]     = useState(false);
 
   useEffect(() => {
     fetch("/api/settings/late-alert")
       .then((r) => r.json())
-      .then((d) => { setLateAlertEnabled(d.enabled ?? false); setLateAlertTime(d.time ?? "09:30"); })
+      .then((d) => setLateAlertEnabled(d.enabled ?? false))
       .catch(() => {});
   }, []);
 
-  async function saveLateAlert(enabled: boolean, time?: string) {
+  async function saveLateAlert(enabled: boolean) {
     setLateAlertLoading(true);
     setLateAlertError("");
-    setLateAlertSaved(false);
     try {
       const res = await fetch("/api/settings/late-alert", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, time: time ?? lateAlertTime }),
+        body: JSON.stringify({ enabled }),
       });
       if (res.ok) {
-        const d = await res.json();
-        setLateAlertEnabled(d.enabled);
-        setLateAlertTime(d.time);
-        setLateAlertSaved(true);
-        setTimeout(() => setLateAlertSaved(false), 3000);
+        setLateAlertEnabled(enabled);
       } else {
         const d = await res.json().catch(() => ({}));
         setLateAlertError(d.error ?? "Failed to save. Please try again.");
@@ -498,7 +491,7 @@ export default function SettingsPage() {
               <h2 className="font-semibold text-gray-900">Late Arrival Alert</h2>
             </div>
             <p className="text-sm text-gray-500">
-              Get an email alert when employees haven't arrived by a set time. Sent to <strong>{user?.email}</strong>.
+              Get an email alert at <strong>9 AM UTC</strong> when employees haven't arrived. Sent to <strong>{user?.email}</strong>.
             </p>
           </div>
           <button
@@ -513,40 +506,12 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {lateAlertEnabled && (
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-700 whitespace-nowrap">Alert time (UTC)</label>
-            <input
-              type="time"
-              value={lateAlertTime}
-              onChange={(e) => setLateAlertTime(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            <button
-              onClick={() => saveLateAlert(true, lateAlertTime)}
-              disabled={lateAlertLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: brandColor }}
-            >
-              {lateAlertLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              Save
-            </button>
-          </div>
-        )}
-
         {lateAlertError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{lateAlertError}</p>
         )}
-        {lateAlertSaved && !lateAlertError && (
+        {lateAlertEnabled && !lateAlertError && (
           <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-            {lateAlertEnabled
-              ? `Alert active — you'll be notified at ${lateAlertTime} UTC if anyone hasn't arrived.`
-              : "Late arrival alerts disabled."}
-          </p>
-        )}
-        {lateAlertEnabled && !lateAlertSaved && !lateAlertError && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            Alert time is in UTC. Convert your local time: e.g. 9:30 AM IST = 04:00 UTC, 9:30 AM GMT = 09:30 UTC.
+            Alert is active — you'll receive an email at 9 AM UTC if any employees haven't arrived.
           </p>
         )}
       </div>

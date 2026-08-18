@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/late-alert",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
