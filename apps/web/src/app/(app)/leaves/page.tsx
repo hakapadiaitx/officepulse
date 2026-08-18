@@ -58,7 +58,6 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
   const [endDate,    setEndDate]    = useState("");
   const [type,       setType]       = useState<LeaveType>("ANNUAL");
   const [reason,     setReason]     = useState("");
-  const [status,     setStatus]     = useState<LeaveStatus>("APPROVED");
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
 
@@ -73,7 +72,7 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
       const res = await fetch("/api/leaves", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, startDate, endDate, type, reason: reason || null, status }),
+        body: JSON.stringify({ employeeId, startDate, endDate, type, reason: reason || null }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Failed to create"); }
       onCreated();
@@ -122,15 +121,6 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
               {(Object.entries(typeLabels) as [LeaveType, string][]).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as LeaveStatus)} className="input">
-              <option value="APPROVED">Approved</option>
-              <option value="PENDING">Pending</option>
-              <option value="REJECTED">Rejected</option>
             </select>
           </div>
 

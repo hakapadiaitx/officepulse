@@ -431,6 +431,98 @@ export async function sendDailyDigest(params: DigestEmailParams): Promise<void> 
   if (error) console.error("[email] Daily digest failed:", error);
 }
 
+export interface LeaveRequestEmailParams {
+  to: string;
+  adminFirstName: string;
+  companyName: string;
+  employeeName: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason: string | null;
+  appUrl: string;
+}
+
+function leaveRequestHtml(p: LeaveRequestEmailParams): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>New Leave Request</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+        <tr><td style="background:#4f46e5;padding:28px 40px;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">OfficePulse</h1>
+          <p style="margin:4px 0 0;color:#c7d2fe;font-size:13px;">New Leave Request · ${p.companyName}</p>
+        </td></tr>
+        <tr><td style="padding:32px 40px;">
+          <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${p.adminFirstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+            <strong>${p.employeeName}</strong> has submitted a leave request that requires your approval.
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:28px;">
+            <tr>
+              <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Employee</p>
+                <p style="margin:4px 0 0;font-size:15px;color:#111827;font-weight:600;">${p.employeeName}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Leave Type</p>
+                <p style="margin:4px 0 0;font-size:15px;color:#111827;">${p.leaveType}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Dates</p>
+                <p style="margin:4px 0 0;font-size:15px;color:#111827;">${p.startDate} → ${p.endDate} <span style="color:#6b7280;">(${p.days} day${p.days !== 1 ? "s" : ""})</span></p>
+              </td>
+            </tr>
+            ${p.reason ? `<tr>
+              <td style="padding:14px 20px;">
+                <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Reason</p>
+                <p style="margin:4px 0 0;font-size:14px;color:#374151;">${p.reason}</p>
+              </td>
+            </tr>` : ""}
+          </table>
+
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#4f46e5;border-radius:8px;">
+              <a href="${p.appUrl}/leaves" style="display:inline-block;padding:12px 24px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
+                Review &amp; Approve →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">OfficePulse · Approve or reject this request in your dashboard.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendLeaveRequestNotification(params: LeaveRequestEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("[email] RESEND_API_KEY not configured — skipping leave request email");
+    return;
+  }
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const { error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject: `Leave request from ${params.employeeName} · ${params.days} day${params.days !== 1 ? "s" : ""} · ${params.companyName}`,
+    html: leaveRequestHtml(params),
+  });
+  if (error) console.error("[email] Leave request notification failed:", error);
+}
+
 export interface LateAlertEmailParams {
   to: string;
   adminFirstName: string;
