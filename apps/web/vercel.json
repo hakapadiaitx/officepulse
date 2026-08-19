@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run build",
-  "installCommand": "cd ../.. && npm ci --legacy-peer-deps",
+  "installCommand": "npm install --legacy-peer-deps",
   "outputDirectory": ".next",
   "crons": [
     {
