@@ -103,20 +103,21 @@ export async function GET(req: NextRequest) {
       byDay[dayKey].employees.add(empId);
       byEmployee[empId].days.add(dayKey);
 
-      // In-office time — only for completed sessions
+      // In-office time — completed sessions + active (open) sessions
+      const sessionEnd = log.checkOutTime ?? (now < end ? now : end);
+      const inMins = Math.round((sessionEnd.getTime() - log.checkInTime.getTime()) / 60000);
+      if (inMins > 0) {
+        byEmployee[empId].inMinutes += inMins;
+        byEmployee[empId].sessions += 1;
+        totalInMinutes += inMins;
+        totalCompletedSessions += 1;
+        byDay[dayKey].inMinutes += inMins;
+
+        if (!byEmployeeDay[empId][dayKey]) byEmployeeDay[empId][dayKey] = { inMinutes: 0, outMinutes: 0 };
+        byEmployeeDay[empId][dayKey].inMinutes += inMins;
+      }
+
       if (log.checkOutTime) {
-        const inMins = Math.round((log.checkOutTime.getTime() - log.checkInTime.getTime()) / 60000);
-        if (inMins > 0) {
-          byEmployee[empId].inMinutes += inMins;
-          byEmployee[empId].sessions += 1;
-          totalInMinutes += inMins;
-          totalCompletedSessions += 1;
-          byDay[dayKey].inMinutes += inMins;
-
-          if (!byEmployeeDay[empId][dayKey]) byEmployeeDay[empId][dayKey] = { inMinutes: 0, outMinutes: 0 };
-          byEmployeeDay[empId][dayKey].inMinutes += inMins;
-        }
-
         // Out-of-office gap — only after a temporary checkout (not end-of-day)
         if (!log.isEndOfDay) {
           let gapEnd: Date;
