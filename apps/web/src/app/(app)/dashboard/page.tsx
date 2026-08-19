@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { EmployeeStatusList } from "@/components/dashboard/EmployeeStatusList";
 
-type Status = "not_arrived" | "in" | "out" | "left";
+type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
 
 interface Employee {
   id: string;
@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const outCount         = employees.filter((e) => e.status === "out").length;
   const notArrivedCount  = employees.filter((e) => e.status === "not_arrived").length;
   const leftCount        = employees.filter((e) => e.status === "left").length;
+  const onLeaveCount     = employees.filter((e) => e.status === "on_leave").length;
 
   return (
     <div className="space-y-6">
@@ -57,6 +58,7 @@ export default function DashboardPage() {
             outCount={outCount}
             notArrivedCount={notArrivedCount}
             leftCount={leftCount}
+            onLeaveCount={onLeaveCount}
             todayMinutes={todayMinutes}
           />
           <EmployeeStatusList employees={employees} />

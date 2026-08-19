@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 
-type Status = "not_arrived" | "in" | "out" | "left";
+type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
 
 interface Employee {
   id: string;
@@ -14,12 +14,13 @@ interface Employee {
 const statusConfig: Record<Status, { label: string; dot: string; badge: string; text: string }> = {
   in:          { label: "At Work",       dot: "bg-green-500",  badge: "bg-green-100",  text: "text-green-700" },
   out:         { label: "Out of Office", dot: "bg-orange-500", badge: "bg-orange-100", text: "text-orange-700" },
-  not_arrived: { label: "Not Arrived",   dot: "bg-gray-300",   badge: "bg-gray-100",   text: "text-gray-500" },
-  left:        { label: "Left for Day",  dot: "bg-gray-400",   badge: "bg-gray-100",   text: "text-gray-400" },
+  not_arrived: { label: "Not Arrived",   dot: "bg-gray-300",   badge: "bg-gray-100",   text: "text-gray-500"  },
+  left:        { label: "Left for Day",  dot: "bg-gray-400",   badge: "bg-gray-100",   text: "text-gray-400"  },
+  on_leave:    { label: "On Leave",      dot: "bg-blue-400",   badge: "bg-blue-50",    text: "text-blue-600"  },
 };
 
 export function EmployeeStatusList({ employees }: { employees: Employee[] }) {
-  const sortOrder: Status[] = ["in", "out", "not_arrived", "left"];
+  const sortOrder: Status[] = ["in", "out", "not_arrived", "on_leave", "left"];
   const sorted = [...employees].sort((a, b) => sortOrder.indexOf(a.status) - sortOrder.indexOf(b.status));
 
   return (
@@ -44,10 +45,13 @@ export function EmployeeStatusList({ employees }: { employees: Employee[] }) {
                   {emp.purpose && emp.status === "out" && (
                     <p className="text-xs text-gray-400">{emp.purpose}</p>
                   )}
+                  {emp.status === "on_leave" && (
+                    <p className="text-xs text-blue-500 italic">On approved leave</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {emp.lastAction && emp.status !== "not_arrived" && (
+                {emp.lastAction && emp.status !== "not_arrived" && emp.status !== "on_leave" && (
                   <span className="text-xs text-gray-400">
                     {formatDistanceToNow(new Date(emp.lastAction), { addSuffix: true })}
                   </span>

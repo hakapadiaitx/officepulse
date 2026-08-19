@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getTenantId } from "@/lib/session";
+import { sendLeaveStatusEmail } from "@/lib/email";
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -13,6 +14,10 @@ const updateSchema = z.object({
   status:     z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
   adminNote:  z.string().max(500).nullable().optional(),
 });
+
+const typeLabels: Record<string, string> = {
+  ANNUAL: "Annual Leave", SICK: "Sick Leave", PERSONAL: "Personal", OTHER: "Other",
+};
 
 export async function PATCH(
   req: NextRequest,
@@ -32,9 +37,35 @@ export async function PATCH(
     where: { id },
     data,
     include: {
-      employee: { select: { id: true, firstName: true, lastName: true } },
+      employee: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
+
+  // Send status email to employee if status changed to APPROVED or REJECTED and they have an email
+  const statusChanged = data.status && data.status !== existing.status;
+  const notifiable    = data.status === "APPROVED" || data.status === "REJECTED";
+  const employeeEmail = updated.employee.email;
+
+  if (statusChanged && notifiable && employeeEmail) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+    const start  = new Date(updated.startDate + "T12:00:00Z");
+    const end    = new Date(updated.endDate   + "T12:00:00Z");
+    const days   = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.vercel.app";
+
+    await sendLeaveStatusEmail({
+      to:                employeeEmail,
+      employeeFirstName: updated.employee.firstName,
+      companyName:       tenant?.name ?? "Your company",
+      status:            data.status,
+      leaveType:         typeLabels[updated.type] ?? updated.type,
+      startDate:         updated.startDate,
+      endDate:           updated.endDate,
+      days,
+      adminNote:         updated.adminNote ?? null,
+      appUrl,
+    }).catch((err) => console.error("[leaves/PATCH] Status email failed:", err));
+  }
 
   return NextResponse.json(updated);
 }

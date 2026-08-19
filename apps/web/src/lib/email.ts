@@ -578,6 +578,92 @@ function lateAlertHtml(p: LateAlertEmailParams): string {
 </html>`;
 }
 
+export interface LeaveStatusEmailParams {
+  to: string;
+  employeeFirstName: string;
+  companyName: string;
+  status: "APPROVED" | "REJECTED";
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  adminNote: string | null;
+  appUrl: string;
+}
+
+function leaveStatusHtml(p: LeaveStatusEmailParams): string {
+  const approved = p.status === "APPROVED";
+  const headerBg  = approved ? "#16a34a" : "#dc2626";
+  const badgeBg   = approved ? "#dcfce7" : "#fee2e2";
+  const badgeText = approved ? "#15803d" : "#b91c1c";
+  const headline  = approved ? "Your leave request has been approved ✓" : "Your leave request has been declined";
+  const body      = approved
+    ? `Great news! Your ${p.leaveType} request for <strong>${p.days} day${p.days !== 1 ? "s" : ""}</strong> has been approved by ${p.companyName}.`
+    : `Unfortunately your ${p.leaveType} request for <strong>${p.days} day${p.days !== 1 ? "s" : ""}</strong> has been declined by ${p.companyName}.`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${headline}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+        <tr><td style="background:${headerBg};padding:28px 40px;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">OfficePulse</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,.75);font-size:13px;">Leave Request Update · ${p.companyName}</p>
+        </td></tr>
+        <tr><td style="padding:32px 40px;">
+          <p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${p.employeeFirstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">${body}</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+            <tr><td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${[
+                  ["Leave Type", p.leaveType],
+                  ["Dates", `${p.startDate} → ${p.endDate}`],
+                  ["Duration", `${p.days} day${p.days !== 1 ? "s" : ""}`],
+                  ["Status", `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;background:${badgeBg};color:${badgeText};">${p.status}</span>`],
+                ].map(([label, value]) => `
+                <tr>
+                  <td style="padding:6px 0;font-size:13px;color:#6b7280;width:110px;">${label}</td>
+                  <td style="padding:6px 0;font-size:13px;color:#111827;font-weight:500;">${value}</td>
+                </tr>`).join("")}
+                ${p.adminNote ? `
+                <tr>
+                  <td style="padding:6px 0;font-size:13px;color:#6b7280;vertical-align:top;">Note</td>
+                  <td style="padding:6px 0;font-size:13px;color:#374151;font-style:italic;">${p.adminNote}</td>
+                </tr>` : ""}
+              </table>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+            If you have any questions, please speak with your manager.<br>
+            — ${p.companyName} via OfficePulse
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">OfficePulse · Employee attendance platform</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendLeaveStatusEmail(params: LeaveStatusEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) throw new Error("RESEND_API_KEY is not configured");
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
+  const subject = params.status === "APPROVED"
+    ? `Leave approved · ${params.startDate} → ${params.endDate} · ${params.companyName}`
+    : `Leave request declined · ${params.startDate} → ${params.endDate} · ${params.companyName}`;
+  const { error } = await resend.emails.send({ from, to: params.to, subject, html: leaveStatusHtml(params) });
+  if (error) throw new Error(error.message);
+}
+
 export async function sendLateAlert(params: LateAlertEmailParams): Promise<void> {
   const resend = getResend();
   if (!resend) {
