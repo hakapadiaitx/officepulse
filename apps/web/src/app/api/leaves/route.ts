@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Notify the tenant owner by email
+  // Notify the tenant owner by email — must be awaited before returning
+  // (Vercel serverless functions terminate on response, killing fire-and-forget work)
   const owner = tenant?.users[0];
   if (owner) {
     const start = new Date(data.startDate + "T12:00:00Z");
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.vercel.app";
 
-    sendLeaveRequestNotification({
+    await sendLeaveRequestNotification({
       to:              owner.email,
       adminFirstName:  owner.firstName,
       companyName:     tenant!.name,

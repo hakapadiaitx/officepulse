@@ -162,7 +162,7 @@ export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<void
     return;
   }
 
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
 
   const { error } = await resend.emails.send({
     from,
@@ -223,7 +223,7 @@ export async function sendPasswordResetEmail(params: PasswordResetEmailParams): 
     console.warn("[email] RESEND_API_KEY not configured — skipping password reset email");
     return;
   }
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
   const { error } = await resend.emails.send({
     from,
     to: params.to,
@@ -304,7 +304,7 @@ export async function sendCancellationEmail(params: CancellationEmailParams): Pr
     console.warn("[email] RESEND_API_KEY not configured — skipping cancellation email");
     return;
   }
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
   const { error } = await resend.emails.send({
     from,
     to: params.to,
@@ -421,7 +421,7 @@ export async function sendDailyDigest(params: DigestEmailParams): Promise<void> 
     console.warn("[email] RESEND_API_KEY not configured — skipping daily digest");
     return;
   }
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
   const { error } = await resend.emails.send({
     from,
     to: params.to,
@@ -513,7 +513,7 @@ export async function sendLeaveRequestNotification(params: LeaveRequestEmailPara
     console.warn("[email] RESEND_API_KEY not configured — skipping leave request email");
     return;
   }
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
   const { error } = await resend.emails.send({
     from,
     to: params.to,
@@ -586,7 +586,7 @@ export async function sendLateAlert(params: LateAlertEmailParams): Promise<void>
     console.warn("[email] RESEND_API_KEY not configured — skipping late alert");
     return;
   }
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
   const { error } = await resend.emails.send({
     from,
     to: params.to,
@@ -604,7 +604,7 @@ export async function sendInternalNotification(params: NotificationEmailParams):
     return;
   }
 
-  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@officepulse.app>";
+  const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
 
   const { error } = await resend.emails.send({
     from,
