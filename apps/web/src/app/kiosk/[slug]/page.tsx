@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
-import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays } from "lucide-react";
 import Image from "next/image";
 
 type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
@@ -422,6 +422,185 @@ function KioskEditModal({ employee, todayDate, kioskToken, brandColor, onClose }
   );
 }
 
+// ── KioskLeaveModal ────────────────────────────────────────────────────────────
+type LeaveType = "ANNUAL" | "SICK" | "PERSONAL" | "OTHER";
+const leaveTypeLabels: Record<LeaveType, string> = {
+  ANNUAL: "Annual Leave", SICK: "Sick Leave", PERSONAL: "Personal", OTHER: "Other",
+};
+
+interface KioskLeaveModalProps {
+  employee: Employee;
+  slug: string;
+  brandColor: string;
+  onClose: () => void;
+}
+
+function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModalProps) {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [startDate, setStartDate] = useState(today);
+  const [endDate,   setEndDate]   = useState(today);
+  const [type,      setType]      = useState<LeaveType>("ANNUAL");
+  const [reason,    setReason]    = useState("");
+  const [empPin,    setEmpPin]    = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error,     setError]     = useState("");
+  const [success,   setSuccess]   = useState(false);
+
+  function handleKey(key: string) {
+    setError("");
+    if (key === "⌫") { setEmpPin((p) => p.slice(0, -1)); return; }
+    if (key === "✓") { if (empPin.length === 4 && !submitting) submit(); return; }
+    if (empPin.length < 4) setEmpPin((p) => p + key);
+  }
+
+  async function submit() {
+    if (endDate < startDate) { setError("End date must be on or after start date."); return; }
+    if (empPin.length !== 4) { setError("Please enter your 4-digit PIN."); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/kiosk/${slug}/leave-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: employee.id, pin: empPin, startDate, endDate, type, reason: reason || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Failed to submit."); setEmpPin(""); return; }
+      setSuccess(true);
+      setTimeout(onClose, 2500);
+    } catch {
+      setError("Network error. Please try again.");
+      setEmpPin("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[95vh] overflow-y-auto">
+
+        {success ? (
+          <div className="p-10 text-center flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <Check className="w-8 h-8 text-green-600" />
+            </div>
+            <p className="text-xl font-bold text-gray-900">Request Submitted!</p>
+            <p className="text-sm text-gray-500">Your leave request has been sent to the admin for approval.</p>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Request Leave</h2>
+                <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style={{ colorScheme: "light" }}
+                  />
+                </div>
+              </div>
+
+              {/* Type */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">Leave Type</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as LeaveType)}
+                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                >
+                  {(Object.entries(leaveTypeLabels) as [LeaveType, string][]).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">Reason <span className="font-normal text-gray-400">(optional)</span></label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Add a note…"
+                  rows={2}
+                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                />
+              </div>
+
+              {/* PIN */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-2 block">Your 4-digit PIN to confirm</label>
+                <div className="flex gap-3 justify-center mb-3">
+                  {[0,1,2,3].map((i) => (
+                    <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+                      style={{ backgroundColor: empPin.length > i ? brandColor : "transparent", borderColor: empPin.length > i ? brandColor : "#d1d5db" }} />
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {NUMPAD.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => handleKey(k)}
+                      disabled={k === "✓" && (empPin.length !== 4 || submitting)}
+                      className={`py-3 rounded-xl text-lg font-semibold transition-all active:scale-95 disabled:opacity-40 ${
+                        k === "✓" ? "text-white" :
+                        k === "⌫" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" :
+                        "bg-gray-50 text-gray-900 hover:bg-gray-100"
+                      }`}
+                      style={k === "✓" ? { backgroundColor: brandColor } : undefined}
+                    >
+                      {k === "⌫" ? <Delete className="w-4 h-4 mx-auto" /> : k}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>}
+
+              <button
+                onClick={submit}
+                disabled={submitting || empPin.length !== 4}
+                className="w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: brandColor }}
+              >
+                {submitting ? "Submitting…" : "Submit Leave Request"}
+              </button>
+              <button onClick={onClose} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Kiosk Page ────────────────────────────────────────────────────────────
 
 export default function KioskPage() {
@@ -451,6 +630,9 @@ export default function KioskPage() {
 
   // Admin correction modal
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+
+  // Leave request modal
+  const [leaveEmployee, setLeaveEmployee] = useState<Employee | null>(null);
 
   const todayDate = format(new Date(), "yyyy-MM-dd");
 
@@ -527,6 +709,7 @@ export default function KioskPage() {
     setSearch("");
     setKioskToken("");
     setEditEmployee(null);
+    setLeaveEmployee(null);
   }
 
   // --- Action modal ---
@@ -722,14 +905,23 @@ export default function KioskPage() {
               const actions = availableActions(emp.status);
               return (
                 <div key={emp.id} className="card p-5 flex flex-col gap-3 relative">
-                  {/* Admin correction button — top-right corner */}
-                  <button
-                    onClick={() => setEditEmployee(emp)}
-                    title="Edit attendance records"
-                    className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Top-right icon buttons */}
+                  <div className="absolute top-3 right-3 flex gap-1">
+                    <button
+                      onClick={() => setLeaveEmployee(emp)}
+                      title="Request leave"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditEmployee(emp)}
+                      title="Edit attendance records"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
@@ -853,6 +1045,16 @@ export default function KioskPage() {
           kioskToken={kioskToken}
           brandColor={brandColor}
           onClose={() => { setEditEmployee(null); refreshEmployees(); }}
+        />
+      )}
+
+      {/* Leave request modal */}
+      {leaveEmployee && (
+        <KioskLeaveModal
+          employee={leaveEmployee}
+          slug={slug}
+          brandColor={brandColor}
+          onClose={() => setLeaveEmployee(null)}
         />
       )}
     </div>
