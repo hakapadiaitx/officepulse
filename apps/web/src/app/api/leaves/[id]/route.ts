@@ -42,11 +42,11 @@ export async function PATCH(
   });
 
   // Send status email to employee if status changed to APPROVED or REJECTED and they have an email
-  const statusChanged = data.status && data.status !== existing.status;
-  const notifiable    = data.status === "APPROVED" || data.status === "REJECTED";
+  const newStatus     = data.status;
+  const statusChanged = newStatus && newStatus !== existing.status;
   const employeeEmail = updated.employee.email;
 
-  if (statusChanged && notifiable && employeeEmail) {
+  if (statusChanged && (newStatus === "APPROVED" || newStatus === "REJECTED") && employeeEmail) {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
     const start  = new Date(updated.startDate + "T12:00:00Z");
     const end    = new Date(updated.endDate   + "T12:00:00Z");
@@ -57,7 +57,7 @@ export async function PATCH(
       to:                employeeEmail,
       employeeFirstName: updated.employee.firstName,
       companyName:       tenant?.name ?? "Your company",
-      status:            data.status,
+      status:            newStatus,
       leaveType:         typeLabels[updated.type] ?? updated.type,
       startDate:         updated.startDate,
       endDate:           updated.endDate,
