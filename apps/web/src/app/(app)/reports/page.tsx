@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths } from "date-fns";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, CalendarDays } from "lucide-react";
 import { formatHours } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -15,6 +15,8 @@ interface Summary {
   totalEmployees: number;
   totalInMinutes: number;
   totalOutMinutes: number;
+  totalLeaveDays: number;
+  employeesOnLeave: number;
 }
 interface EmpDailyStat { date: string; inMinutes: number; outMinutes: number; }
 interface EmployeeStat {
@@ -24,6 +26,8 @@ interface EmployeeStat {
   outMinutes: number;
   sessions: number;
   daysPresent: number;
+  leaveDays: number;
+  leaveByType: Record<string, number>;
   dailyStats: EmpDailyStat[];
 }
 interface DailyStat { date: string; employees: number; inMinutes: number; outMinutes: number; }
@@ -97,17 +101,18 @@ export default function ReportsPage() {
 
     // Sheet 2 — Employee Breakdown
     const ws2 = XLSX.utils.aoa_to_sheet([
-      ["Employee", "Days Present", "Sessions", "In-Office (h)", "Out-of-Office (h)", "Total (h)"],
+      ["Employee", "Days Present", "Leave Days", "Sessions", "In-Office (h)", "Out-of-Office (h)", "Total (h)"],
       ...data.employeeStats.map((e) => [
         e.name,
         e.daysPresent,
+        e.leaveDays,
         e.sessions,
         +(e.inMinutes / 60).toFixed(2),
         +(e.outMinutes / 60).toFixed(2),
         +((e.inMinutes + e.outMinutes) / 60).toFixed(2),
       ]),
     ]);
-    ws2["!cols"] = cols([24, 14, 10, 14, 18, 10]);
+    ws2["!cols"] = cols([24, 14, 12, 10, 14, 18, 10]);
     XLSX.utils.book_append_sheet(wb, ws2, "Employees");
 
     // Sheet 3 — Daily Breakdown
@@ -181,15 +186,16 @@ export default function ReportsPage() {
       ) : data ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {[
-              { label: "Active Employees", value: data.summary.totalEmployees },
-              { label: "Total Sessions", value: data.summary.totalSessions },
-              { label: "Total In-Office", value: formatHours(data.summary.totalInMinutes), highlight: true },
-              { label: "Total Out-of-Office", value: formatHours(data.summary.totalOutMinutes) },
+              { label: "Active Employees",    value: data.summary.totalEmployees,                        color: "text-gray-900"   },
+              { label: "Total Sessions",      value: data.summary.totalSessions,                         color: "text-gray-900"   },
+              { label: "Total In-Office",     value: formatHours(data.summary.totalInMinutes),            color: "text-green-600"  },
+              { label: "Total Out-of-Office", value: formatHours(data.summary.totalOutMinutes),           color: "text-orange-600" },
+              { label: "Total Leave Days",    value: `${data.summary.totalLeaveDays}d`,                  color: "text-blue-600"   },
             ].map((s) => (
               <div key={s.label} className="card p-5 text-center">
-                <p className={`text-3xl font-bold ${s.highlight ? "text-green-600" : "text-gray-900"}`}>{s.value}</p>
+                <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
                 <p className="text-sm text-gray-500 mt-1">{s.label}</p>
               </div>
             ))}
@@ -257,7 +263,7 @@ export default function ReportsPage() {
                     )}
 
                     {/* Stats pills */}
-                    <div className="flex gap-4 text-xs">
+                    <div className="flex flex-wrap gap-4 text-xs">
                       <span className="flex items-center gap-1.5 text-green-700">
                         <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                         In Office: <strong>{formatHours(emp.inMinutes)}</strong>
@@ -268,6 +274,15 @@ export default function ReportsPage() {
                         Out of Office: <strong>{formatHours(emp.outMinutes)}</strong>
                         {total > 0 && outPct > 0 && <span className="text-gray-400">({outPct}%)</span>}
                       </span>
+                      {emp.leaveDays > 0 && (
+                        <span className="flex items-center gap-1.5 text-blue-600">
+                          <CalendarDays className="w-3 h-3" />
+                          On Leave: <strong>{emp.leaveDays} day{emp.leaveDays !== 1 ? "s" : ""}</strong>
+                          {Object.entries(emp.leaveByType).map(([t, d]) => (
+                            <span key={t} className="text-gray-400">({t.charAt(0) + t.slice(1).toLowerCase()}: {d}d)</span>
+                          ))}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -282,6 +297,7 @@ export default function ReportsPage() {
                     <tr className="text-xs text-gray-400 uppercase tracking-wider border-b border-gray-50">
                       <th className="text-left px-5 py-3">Employee</th>
                       <th className="text-right px-5 py-3">Days Present</th>
+                      <th className="text-right px-5 py-3">Leave Days</th>
                       <th className="text-right px-5 py-3">In Office</th>
                       <th className="text-right px-5 py-3">Out of Office</th>
                       <th className="text-right px-5 py-3">Total</th>
@@ -292,6 +308,11 @@ export default function ReportsPage() {
                       <tr key={emp.employeeId} className="hover:bg-gray-50/50">
                         <td className="px-5 py-3 font-medium text-gray-900">{emp.name}</td>
                         <td className="px-5 py-3 text-right text-gray-600">{emp.daysPresent}</td>
+                        <td className="px-5 py-3 text-right">
+                          {emp.leaveDays > 0
+                            ? <span className="font-medium text-blue-600">{emp.leaveDays}d</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="px-5 py-3 text-right font-medium text-green-700">{formatHours(emp.inMinutes)}</td>
                         <td className="px-5 py-3 text-right text-orange-600">{formatHours(emp.outMinutes)}</td>
                         <td className="px-5 py-3 text-right text-gray-700 font-medium">{formatHours(emp.inMinutes + emp.outMinutes)}</td>

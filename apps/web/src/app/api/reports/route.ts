@@ -6,7 +6,7 @@ import {
   startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter,
-  subDays,
+  subDays, format,
 } from "date-fns";
 
 type Period = "day" | "week" | "month" | "quarter" | "custom";
@@ -144,6 +144,60 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Leave requests overlapping the report period ────────────────────────────
+  const periodStartStr = format(start, "yyyy-MM-dd");
+  const periodEndStr   = format(end,   "yyyy-MM-dd");
+
+  const leaveRequests = await prisma.leaveRequest.findMany({
+    where: {
+      tenantId,
+      status: "APPROVED",
+      ...(employeeId && { employeeId }),
+      startDate: { lte: periodEndStr },
+      endDate:   { gte: periodStartStr },
+    },
+    select: {
+      employeeId: true,
+      startDate: true,
+      endDate: true,
+      type: true,
+      employee: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  interface LeaveEmpStats { name: string; leaveDays: number; byType: Record<string, number>; }
+  const leaveByEmployee: Record<string, LeaveEmpStats> = {};
+  let totalLeaveDays = 0;
+
+  for (const leave of leaveRequests) {
+    const effectiveStart = leave.startDate < periodStartStr ? periodStartStr : leave.startDate;
+    const effectiveEnd   = leave.endDate   > periodEndStr   ? periodEndStr   : leave.endDate;
+    const days = Math.round(
+      (new Date(effectiveEnd + "T12:00:00Z").getTime() - new Date(effectiveStart + "T12:00:00Z").getTime()) / 86400000
+    ) + 1;
+    if (days <= 0) continue;
+
+    if (!leaveByEmployee[leave.employeeId]) {
+      leaveByEmployee[leave.employeeId] = {
+        name: `${leave.employee.firstName} ${leave.employee.lastName}`,
+        leaveDays: 0,
+        byType: {},
+      };
+    }
+    leaveByEmployee[leave.employeeId].leaveDays += days;
+    leaveByEmployee[leave.employeeId].byType[leave.type] =
+      (leaveByEmployee[leave.employeeId].byType[leave.type] ?? 0) + days;
+    totalLeaveDays += days;
+  }
+
+  // Include employees who have leave but no attendance this period
+  for (const [empId, ls] of Object.entries(leaveByEmployee)) {
+    if (!byEmployee[empId]) {
+      byEmployee[empId] = { name: ls.name, inMinutes: 0, outMinutes: 0, sessions: 0, days: new Set() };
+      byEmployeeDay[empId] = {};
+    }
+  }
+
   const employeeStats = Object.entries(byEmployee)
     .map(([id, s]) => ({
       employeeId: id,
@@ -152,6 +206,8 @@ export async function GET(req: NextRequest) {
       outMinutes: s.outMinutes,
       sessions: s.sessions,
       daysPresent: s.days.size,
+      leaveDays: leaveByEmployee[id]?.leaveDays ?? 0,
+      leaveByType: leaveByEmployee[id]?.byType ?? {},
       dailyStats: Object.entries(byEmployeeDay[id] ?? {})
         .map(([date, d]) => ({ date, inMinutes: d.inMinutes, outMinutes: d.outMinutes }))
         .sort((a, b) => a.date.localeCompare(b.date)),
@@ -171,6 +227,8 @@ export async function GET(req: NextRequest) {
       totalEmployees: Object.keys(byEmployee).length,
       totalInMinutes,
       totalOutMinutes,
+      totalLeaveDays,
+      employeesOnLeave: Object.keys(leaveByEmployee).length,
     },
     employeeStats,
     dailyStats,
