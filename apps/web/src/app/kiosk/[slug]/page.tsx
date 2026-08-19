@@ -423,10 +423,29 @@ function KioskEditModal({ employee, todayDate, kioskToken, brandColor, onClose }
 }
 
 // ── KioskLeaveModal ────────────────────────────────────────────────────────────
-type LeaveType = "ANNUAL" | "SICK" | "PERSONAL" | "OTHER";
+type LeaveType   = "ANNUAL" | "SICK" | "PERSONAL" | "OTHER";
+type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 const leaveTypeLabels: Record<LeaveType, string> = {
   ANNUAL: "Annual Leave", SICK: "Sick Leave", PERSONAL: "Personal", OTHER: "Other",
 };
+
+const leaveStatusConfig: Record<LeaveStatus, { label: string; badge: string; text: string }> = {
+  PENDING:  { label: "Pending",  badge: "bg-amber-100",  text: "text-amber-700"  },
+  APPROVED: { label: "Approved", badge: "bg-green-100",  text: "text-green-700"  },
+  REJECTED: { label: "Rejected", badge: "bg-red-100",    text: "text-red-600"    },
+};
+
+interface LeaveRecord {
+  id: string;
+  startDate: string;
+  endDate: string;
+  type: LeaveType;
+  reason: string | null;
+  status: LeaveStatus;
+  adminNote: string | null;
+  createdAt: string;
+}
 
 interface KioskLeaveModalProps {
   employee: Employee;
@@ -435,44 +454,106 @@ interface KioskLeaveModalProps {
   onClose: () => void;
 }
 
+// ── Shared PIN pad used by both tabs ─────────────────────────────────────────
+function PinPad({ pin, onKey, brandColor }: { pin: string; onKey: (k: string) => void; brandColor: string }) {
+  return (
+    <>
+      <div className="flex gap-3 justify-center mb-3">
+        {[0,1,2,3].map((i) => (
+          <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+            style={{ backgroundColor: pin.length > i ? brandColor : "transparent", borderColor: pin.length > i ? brandColor : "#d1d5db" }} />
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {NUMPAD.map((k) => (
+          <button key={k} type="button" onClick={() => onKey(k)}
+            className={`py-3 rounded-xl text-lg font-semibold transition-all active:scale-95 ${
+              k === "✓" ? "text-white" :
+              k === "⌫" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" :
+              "bg-gray-50 text-gray-900 hover:bg-gray-100"
+            }`}
+            style={k === "✓" ? { backgroundColor: brandColor } : undefined}>
+            {k === "⌫" ? <Delete className="w-4 h-4 mx-auto" /> : k}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModalProps) {
   const today = format(new Date(), "yyyy-MM-dd");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate,   setEndDate]   = useState(today);
-  const [type,      setType]      = useState<LeaveType>("ANNUAL");
-  const [reason,    setReason]    = useState("");
-  const [empPin,    setEmpPin]    = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error,     setError]     = useState("");
-  const [success,   setSuccess]   = useState(false);
+  const [tab, setTab] = useState<"new" | "status">("new");
 
-  function handleKey(key: string) {
-    setError("");
-    if (key === "⌫") { setEmpPin((p) => p.slice(0, -1)); return; }
-    if (key === "✓") { if (empPin.length === 4 && !submitting) submit(); return; }
-    if (empPin.length < 4) setEmpPin((p) => p + key);
+  // ── New Request state ──────────────────────────────────────────────────────
+  const [startDate,  setStartDate]  = useState(today);
+  const [endDate,    setEndDate]    = useState(today);
+  const [type,       setType]       = useState<LeaveType>("ANNUAL");
+  const [reason,     setReason]     = useState("");
+  const [newPin,     setNewPin]     = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [newError,   setNewError]   = useState("");
+  const [submitted,  setSubmitted]  = useState(false);
+
+  function handleNewKey(key: string) {
+    setNewError("");
+    if (key === "⌫") { setNewPin((p) => p.slice(0, -1)); return; }
+    if (key === "✓") { if (newPin.length === 4 && !submitting) submitNew(); return; }
+    if (newPin.length < 4) setNewPin((p) => p + key);
   }
 
-  async function submit() {
-    if (endDate < startDate) { setError("End date must be on or after start date."); return; }
-    if (empPin.length !== 4) { setError("Please enter your 4-digit PIN."); return; }
+  async function submitNew() {
+    if (endDate < startDate) { setNewError("End date must be on or after start date."); return; }
     setSubmitting(true);
-    setError("");
+    setNewError("");
     try {
       const res = await fetch(`/api/kiosk/${slug}/leave-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: employee.id, pin: empPin, startDate, endDate, type, reason: reason || null }),
+        body: JSON.stringify({ employeeId: employee.id, pin: newPin, startDate, endDate, type, reason: reason || null }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Failed to submit."); setEmpPin(""); return; }
-      setSuccess(true);
+      if (!res.ok) { setNewError(data.error ?? "Failed to submit."); setNewPin(""); return; }
+      setSubmitted(true);
       setTimeout(onClose, 2500);
     } catch {
-      setError("Network error. Please try again.");
-      setEmpPin("");
+      setNewError("Network error. Please try again.");
+      setNewPin("");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // ── My Requests state ──────────────────────────────────────────────────────
+  const [statusPin,   setStatusPin]   = useState("");
+  const [fetching,    setFetching]    = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [myLeaves,    setMyLeaves]    = useState<LeaveRecord[] | null>(null);
+
+  function handleStatusKey(key: string) {
+    setStatusError("");
+    if (key === "⌫") { setStatusPin((p) => p.slice(0, -1)); return; }
+    if (key === "✓") { if (statusPin.length === 4 && !fetching) fetchMyLeaves(); return; }
+    if (statusPin.length < 4) setStatusPin((p) => p + key);
+  }
+
+  async function fetchMyLeaves() {
+    setFetching(true);
+    setStatusError("");
+    try {
+      const res = await fetch(`/api/kiosk/${slug}/my-leaves`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: employee.id, pin: statusPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatusError(data.error ?? "Failed to load."); setStatusPin(""); return; }
+      setMyLeaves(data);
+    } catch {
+      setStatusError("Network error. Please try again.");
+      setStatusPin("");
+    } finally {
+      setFetching(false);
     }
   }
 
@@ -480,7 +561,8 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[95vh] overflow-y-auto">
 
-        {success ? (
+        {/* Success screen */}
+        {submitted ? (
           <div className="p-10 text-center flex flex-col items-center gap-4">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
               <Check className="w-8 h-8 text-green-600" />
@@ -491,9 +573,9 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
         ) : (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
               <div>
-                <h2 className="text-base font-bold text-gray-900">Request Leave</h2>
+                <h2 className="text-base font-bold text-gray-900">Leave</h2>
                 <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
               </div>
               <button onClick={onClose} className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
@@ -501,99 +583,125 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
               </button>
             </div>
 
-            <div className="px-5 py-4 space-y-3">
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Start Date</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style={{ colorScheme: "light" }}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">End Date</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    min={startDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style={{ colorScheme: "light" }}
-                  />
-                </div>
-              </div>
-
-              {/* Type */}
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Leave Type</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as LeaveType)}
-                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-                >
-                  {(Object.entries(leaveTypeLabels) as [LeaveType, string][]).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Reason */}
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Reason <span className="font-normal text-gray-400">(optional)</span></label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Add a note…"
-                  rows={2}
-                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-                />
-              </div>
-
-              {/* PIN */}
-              <div>
-                <label className="text-xs font-semibold text-gray-500 mb-2 block">Your 4-digit PIN to confirm</label>
-                <div className="flex gap-3 justify-center mb-3">
-                  {[0,1,2,3].map((i) => (
-                    <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
-                      style={{ backgroundColor: empPin.length > i ? brandColor : "transparent", borderColor: empPin.length > i ? brandColor : "#d1d5db" }} />
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {NUMPAD.map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => handleKey(k)}
-                      disabled={k === "✓" && (empPin.length !== 4 || submitting)}
-                      className={`py-3 rounded-xl text-lg font-semibold transition-all active:scale-95 disabled:opacity-40 ${
-                        k === "✓" ? "text-white" :
-                        k === "⌫" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" :
-                        "bg-gray-50 text-gray-900 hover:bg-gray-100"
-                      }`}
-                      style={k === "✓" ? { backgroundColor: brandColor } : undefined}
-                    >
-                      {k === "⌫" ? <Delete className="w-4 h-4 mx-auto" /> : k}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>}
-
-              <button
-                onClick={submit}
-                disabled={submitting || empPin.length !== 4}
-                className="w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: brandColor }}
-              >
-                {submitting ? "Submitting…" : "Submit Leave Request"}
-              </button>
-              <button onClick={onClose} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+            {/* Tabs */}
+            <div className="flex gap-1 mx-5 mt-3 mb-1 bg-gray-100 rounded-xl p-1">
+              {(["new", "status"] as const).map((t) => (
+                <button key={t} onClick={() => setTab(t)}
+                  className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    tab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                  }`}>
+                  {t === "new" ? "New Request" : "My Requests"}
+                </button>
+              ))}
             </div>
+
+            {/* ── Tab: New Request ── */}
+            {tab === "new" && (
+              <div className="px-5 py-4 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Start Date</label>
+                    <input type="date" value={startDate}
+                      onChange={(e) => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }}
+                      className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style={{ colorScheme: "light" }} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">End Date</label>
+                    <input type="date" value={endDate} min={startDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style={{ colorScheme: "light" }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Leave Type</label>
+                  <select value={type} onChange={(e) => setType(e.target.value as LeaveType)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                    {(Object.entries(leaveTypeLabels) as [LeaveType, string][]).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Reason <span className="font-normal text-gray-400">(optional)</span></label>
+                  <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+                    placeholder="Add a note…" rows={2}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-2 block">Your 4-digit PIN to confirm</label>
+                  <PinPad pin={newPin} onKey={handleNewKey} brandColor={brandColor} />
+                </div>
+
+                {newError && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{newError}</p>}
+
+                <button onClick={submitNew} disabled={submitting || newPin.length !== 4}
+                  className="w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: brandColor }}>
+                  {submitting ? "Submitting…" : "Submit Leave Request"}
+                </button>
+                <button onClick={onClose} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+              </div>
+            )}
+
+            {/* ── Tab: My Requests ── */}
+            {tab === "status" && (
+              <div className="px-5 py-4 space-y-3">
+                {myLeaves === null ? (
+                  <>
+                    <p className="text-xs text-gray-500 text-center">Enter your PIN to view your leave requests</p>
+                    <PinPad pin={statusPin} onKey={handleStatusKey} brandColor={brandColor} />
+                    {statusError && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{statusError}</p>}
+                    <button onClick={fetchMyLeaves} disabled={fetching || statusPin.length !== 4}
+                      className="w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                      style={{ backgroundColor: brandColor }}>
+                      {fetching ? "Loading…" : "View My Requests"}
+                    </button>
+                    <button onClick={onClose} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+                  </>
+                ) : myLeaves.length === 0 ? (
+                  <div className="text-center py-8 flex flex-col items-center gap-3 text-gray-400">
+                    <CalendarDays className="w-10 h-10 opacity-30" />
+                    <p className="text-sm">No leave requests yet.</p>
+                    <button onClick={() => setTab("new")} className="text-sm font-semibold" style={{ color: brandColor }}>
+                      Submit your first request →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myLeaves.map((leave) => {
+                      const days = Math.round(
+                        (new Date(leave.endDate + "T12:00:00Z").getTime() - new Date(leave.startDate + "T12:00:00Z").getTime()) / 86400000
+                      ) + 1;
+                      const sc = leaveStatusConfig[leave.status];
+                      return (
+                        <div key={leave.id} className="rounded-xl border border-gray-100 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-gray-900">{leaveTypeLabels[leave.type] ?? leave.type}</span>
+                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sc.badge} ${sc.text}`}>{sc.label}</span>
+                          </div>
+                          <p className="text-xs text-gray-500">{leave.startDate} → {leave.endDate} · {days} day{days !== 1 ? "s" : ""}</p>
+                          {leave.reason && <p className="text-xs text-gray-400 italic">"{leave.reason}"</p>}
+                          {leave.adminNote && (
+                            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                              <span className="font-semibold">Admin note:</span> {leave.adminNote}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => { setMyLeaves(null); setStatusPin(""); }}
+                      className="w-full py-2 text-xs text-gray-400 hover:text-gray-600">
+                      Check again with different PIN
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
