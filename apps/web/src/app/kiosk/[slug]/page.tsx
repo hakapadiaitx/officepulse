@@ -945,10 +945,20 @@ export default function KioskPage() {
                     {cfg.label}
                   </span>
 
-                  {emp.status === "on_leave" && (
-                    <p className="text-xs text-blue-500 italic">On approved leave</p>
-                  )}
-                  {actions.length > 0 ? (
+                  {emp.status === "on_leave" ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {(["arrive", "checkout", "leave"] as Action[]).map((action) => (
+                          <button key={action} disabled
+                            title="Employee is on approved leave"
+                            className="flex-1 min-w-[80px] py-2 px-3 rounded-lg text-sm font-semibold bg-gray-100 text-gray-300 cursor-not-allowed select-none">
+                            {actionConfig[action].label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-blue-500 italic">On approved leave — actions disabled</p>
+                    </div>
+                  ) : actions.length > 0 ? (
                     <div className="flex gap-2 flex-wrap">
                       {actions.map((action) => {
                         const ac = actionConfig[action];
