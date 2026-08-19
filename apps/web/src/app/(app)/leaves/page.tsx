@@ -49,7 +49,7 @@ const tabs: { key: string; label: string }[] = [
 interface NewLeaveModalProps {
   employees: Employee[];
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: () => void;   // refreshes list, does NOT close modal
 }
 
 function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
@@ -60,6 +60,7 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
   const [reason,     setReason]     = useState("");
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
+  const [success,    setSuccess]    = useState("");
 
   async function submit() {
     setError("");
@@ -68,6 +69,7 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
     if (endDate < startDate) { setError("End date must be on or after start date."); return; }
 
     setSaving(true);
+    setSuccess("");
     try {
       const res = await fetch("/api/leaves", {
         method: "POST",
@@ -76,12 +78,11 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Failed to create"); }
       const result = await res.json();
+      onCreated(); // refresh the list but keep modal open to show status
       if (!result.emailSent) {
-        setError(`Request created, but admin email failed: ${result.emailError ?? "unknown error"} (to: ${result.emailTo ?? "unknown"})`);
-        // Still notify parent so the list refreshes, but keep modal open to show error
-        onCreated();
+        setError(`Request created but admin notification failed — ${result.emailError ?? "unknown error"} (tried sending to: ${result.emailTo ?? "no owner email found"})`);
       } else {
-        onCreated();
+        setSuccess(`Request created. Admin notified at ${result.emailTo}.`);
       }
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -142,7 +143,8 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {error   && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {success && <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{success}</p>}
 
           <div className="flex gap-3 pt-1">
             <button
@@ -371,7 +373,7 @@ export default function LeavesPage() {
         <NewLeaveModal
           employees={employees}
           onClose={() => setShowNew(false)}
-          onCreated={() => { setShowNew(false); fetchLeaves(); }}
+          onCreated={fetchLeaves}
         />
       )}
     </div>
