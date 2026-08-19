@@ -75,7 +75,14 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
         body: JSON.stringify({ employeeId, startDate, endDate, type, reason: reason || null }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Failed to create"); }
-      onCreated();
+      const result = await res.json();
+      if (!result.emailSent) {
+        setError(`Request created, but admin email failed: ${result.emailError ?? "unknown error"} (to: ${result.emailTo ?? "unknown"})`);
+        // Still notify parent so the list refreshes, but keep modal open to show error
+        onCreated();
+      } else {
+        onCreated();
+      }
     } catch (err: unknown) {
       setError((err as Error).message);
     } finally {

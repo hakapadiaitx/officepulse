@@ -74,10 +74,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Notify the tenant owner by email — must be awaited before returning
-  // (Vercel serverless functions terminate on response, killing fire-and-forget work)
+  // Notify the tenant owner by email — awaited so Vercel doesn't terminate before send completes
   const owner = tenant?.users[0];
+  let emailSent = false;
+  let emailError: string | null = null;
+  let emailTo: string | null = null;
+
   if (owner) {
+    emailTo = owner.email;
     const start = new Date(data.startDate + "T12:00:00Z");
     const end   = new Date(data.endDate   + "T12:00:00Z");
     const days  = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
@@ -88,19 +92,28 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.vercel.app";
 
-    await sendLeaveRequestNotification({
-      to:              owner.email,
-      adminFirstName:  owner.firstName,
-      companyName:     tenant!.name,
-      employeeName:    `${employee.firstName} ${employee.lastName}`,
-      leaveType:       typeLabels[data.type] ?? data.type,
-      startDate:       data.startDate,
-      endDate:         data.endDate,
-      days,
-      reason:          data.reason ?? null,
-      appUrl,
-    }).catch((err) => console.error("[leaves/POST] Email notification failed:", err));
+    try {
+      await sendLeaveRequestNotification({
+        to:              owner.email,
+        adminFirstName:  owner.firstName,
+        companyName:     tenant!.name,
+        employeeName:    `${employee.firstName} ${employee.lastName}`,
+        leaveType:       typeLabels[data.type] ?? data.type,
+        startDate:       data.startDate,
+        endDate:         data.endDate,
+        days,
+        reason:          data.reason ?? null,
+        appUrl,
+      });
+      emailSent = true;
+    } catch (err: unknown) {
+      emailError = err instanceof Error ? err.message : String(err);
+      console.error("[leaves/POST] Email notification failed:", emailError, "| to:", owner.email, "| from:", process.env.EMAIL_FROM);
+    }
+  } else {
+    emailError = "No OWNER user found for this tenant";
+    console.warn("[leaves/POST] Skipping email — no OWNER user found for tenantId:", tenantId);
   }
 
-  return NextResponse.json(leave, { status: 201 });
+  return NextResponse.json({ ...leave, emailSent, emailError, emailTo }, { status: 201 });
 }

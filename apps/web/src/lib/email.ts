@@ -507,20 +507,18 @@ function leaveRequestHtml(p: LeaveRequestEmailParams): string {
 </html>`;
 }
 
-export async function sendLeaveRequestNotification(params: LeaveRequestEmailParams): Promise<void> {
+export async function sendLeaveRequestNotification(params: LeaveRequestEmailParams): Promise<{ messageId: string }> {
   const resend = getResend();
-  if (!resend) {
-    console.warn("[email] RESEND_API_KEY not configured — skipping leave request email");
-    return;
-  }
+  if (!resend) throw new Error("RESEND_API_KEY is not configured");
   const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from,
     to: params.to,
     subject: `Leave request from ${params.employeeName} · ${params.days} day${params.days !== 1 ? "s" : ""} · ${params.companyName}`,
     html: leaveRequestHtml(params),
   });
-  if (error) console.error("[email] Leave request notification failed:", error);
+  if (error) throw new Error(error.message);
+  return { messageId: data!.id };
 }
 
 export interface LateAlertEmailParams {
