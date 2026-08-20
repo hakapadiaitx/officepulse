@@ -81,6 +81,7 @@ model Tenant {
   attendanceLogs       AttendanceLog[]
   leaveRequests        LeaveRequest[]
   leavePolicies        LeavePolicy[]
+  leaveAllowances      LeaveAllowance[]
 }
 
 model User {
@@ -117,8 +118,9 @@ model Employee {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  attendanceLogs AttendanceLog[]
-  leaveRequests  LeaveRequest[]
+  attendanceLogs  AttendanceLog[]
+  leaveRequests   LeaveRequest[]
+  leaveAllowances LeaveAllowance[]
 
   @@index([tenantId])
 }
@@ -141,6 +143,23 @@ model AttendanceLog {
   @@index([employeeId])
   @@index([checkInTime])
   @@index([tenantId, checkInTime])
+}
+
+model LeaveAllowance {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year        Int
+  leaveType   LeaveType
+  allowedDays Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([tenantId, employeeId, year, leaveType])
+  @@index([tenantId])
+  @@index([employeeId])
 }
 
 model LeavePolicy {

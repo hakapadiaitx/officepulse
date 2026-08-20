@@ -30,11 +30,13 @@ interface EmployeeBalance {
   name: string;
   used: Record<string, number>;
   allowed: Record<string, number>;
+  isCustom: Record<string, boolean>;
+  overrides: Record<string, number>;
 }
 
 interface BalancesData {
   year: number;
-  allowances: Record<string, number>;
+  policyDefaults: Record<string, number>;
   balances: EmployeeBalance[];
 }
 
@@ -265,12 +267,123 @@ function ActionRow({ leave, onUpdated }: ActionRowProps) {
   );
 }
 
+// ── Per-employee allowance editor row ─────────────────────────────────────────
+interface EmpAllowanceEditorProps {
+  emp: EmployeeBalance;
+  year: number;
+  policyDefaults: Record<string, number>;
+  onSaved: () => void;
+}
+
+function EmpAllowanceEditor({ emp, year, policyDefaults, onSaved }: EmpAllowanceEditorProps) {
+  const [values, setValues] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    for (const t of LEAVE_TYPES) {
+      init[t] = emp.isCustom[t] ? emp.overrides[t] : policyDefaults[t] ?? 0;
+    }
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const hasAnyCustom = LEAVE_TYPES.some((t) => emp.isCustom[t]);
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leaves/employee-allowance", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: emp.employeeId, year, policies: values }),
+      });
+      if (res.ok) { setMsg({ type: "ok", text: "Saved." }); onSaved(); }
+      else { const d = await res.json().catch(() => ({})); setMsg({ type: "err", text: d.error ?? "Failed." }); }
+    } catch { setMsg({ type: "err", text: "Network error." }); }
+    finally { setSaving(false); }
+  }
+
+  async function resetToPolicy() {
+    setResetting(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leaves/employee-allowance", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: emp.employeeId, year }),
+      });
+      if (res.ok) {
+        setValues(Object.fromEntries(LEAVE_TYPES.map((t) => [t, policyDefaults[t] ?? 0])));
+        setMsg({ type: "ok", text: "Reset to policy defaults." });
+        onSaved();
+      } else {
+        setMsg({ type: "err", text: "Failed to reset." });
+      }
+    } catch { setMsg({ type: "err", text: "Network error." }); }
+    finally { setResetting(false); }
+  }
+
+  return (
+    <div className="bg-indigo-50/60 border-t border-indigo-100 px-5 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-indigo-700">Custom allowance for {emp.name} — {year}</p>
+        {hasAnyCustom && (
+          <button onClick={resetToPolicy} disabled={resetting}
+            className="text-xs text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1 disabled:opacity-50">
+            {resetting ? <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" /> : <X className="w-3 h-3" />}
+            Reset to policy defaults
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {LEAVE_TYPES.map((type) => (
+          <div key={type}>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">
+              {typeLabels[type]}
+              {emp.isCustom[type] && <span className="ml-1 text-indigo-500">•</span>}
+            </label>
+            <div className="relative">
+              <input
+                type="number" min={0} max={365}
+                value={values[type] ?? 0}
+                onChange={(e) => {
+                  const val = Math.max(0, Math.min(365, parseInt(e.target.value) || 0));
+                  setValues((v) => ({ ...v, [type]: val }));
+                  setMsg(null);
+                }}
+                className="input pr-8 text-sm"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">d</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">Policy: {policyDefaults[type] ?? 0}d</p>
+          </div>
+        ))}
+      </div>
+
+      {msg && (
+        <p className={`text-xs px-3 py-2 rounded-lg border ${msg.type === "err" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+          {msg.text}
+        </p>
+      )}
+
+      <button onClick={save} disabled={saving}
+        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+        {saving ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        Save custom allowance
+      </button>
+    </div>
+  );
+}
+
 // ── Balances Tab ───────────────────────────────────────────────────────────────
 function BalancesTab() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [data, setData] = useState<BalancesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedEmp, setExpandedEmp] = useState<string | null>(null);
 
   // Policy editor state
   const [policy, setPolicy] = useState<Record<string, number>>({ ANNUAL: 0, SICK: 0, PERSONAL: 0, OTHER: 0 });
@@ -283,7 +396,7 @@ function BalancesTab() {
     if (res.ok) {
       const d: BalancesData = await res.json();
       setData(d);
-      setPolicy({ ...d.allowances });
+      setPolicy({ ...d.policyDefaults });
     }
     setLoading(false);
   }, [year]);
@@ -313,20 +426,18 @@ function BalancesTab() {
     }
   }
 
-  function usagePill(used: number, allowed: number) {
+  function usagePill(used: number, allowed: number, isCustom: boolean) {
     if (allowed === 0) return <span className="text-xs text-gray-400">—</span>;
-    const pct = allowed > 0 ? (used / allowed) * 100 : 0;
+    const pct = (used / allowed) * 100;
     const remaining = allowed - used;
-    const color =
-      pct >= 100 ? "text-red-600 bg-red-50" :
-      pct >= 75  ? "text-amber-600 bg-amber-50" :
-                   "text-green-700 bg-green-50";
+    const color = pct >= 100 ? "text-red-600 bg-red-50" : pct >= 75 ? "text-amber-600 bg-amber-50" : "text-green-700 bg-green-50";
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>
             {used}/{allowed}d
           </span>
+          {isCustom && <span className="text-xs text-indigo-500 font-medium">custom</span>}
           {remaining > 0
             ? <span className="text-xs text-gray-400">{remaining}d left</span>
             : remaining === 0
@@ -347,11 +458,13 @@ function BalancesTab() {
     <div className="space-y-6">
       {/* Year navigator */}
       <div className="flex items-center gap-3">
-        <button onClick={() => setYear((y) => y - 1)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+        <button onClick={() => { setYear((y) => y - 1); setExpandedEmp(null); }}
+          className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
           <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="text-lg font-bold text-gray-900 min-w-[60px] text-center">{year}</span>
-        <button onClick={() => setYear((y) => y + 1)} disabled={year >= currentYear + 1}
+        <button onClick={() => { setYear((y) => y + 1); setExpandedEmp(null); }}
+          disabled={year >= currentYear + 1}
           className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-30">
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -360,8 +473,8 @@ function BalancesTab() {
       {/* Policy editor */}
       <div className="card p-5 space-y-4">
         <div>
-          <h2 className="font-semibold text-gray-900">Leave Policy — {year}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Set the number of allowed days per leave type for all employees.</p>
+          <h2 className="font-semibold text-gray-900">Default Leave Policy — {year}</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Applies to all employees unless a custom allowance is set for them below.</p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -369,10 +482,7 @@ function BalancesTab() {
             <div key={type}>
               <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{typeLabels[type]}</label>
               <div className="relative">
-                <input
-                  type="number"
-                  min={0}
-                  max={365}
+                <input type="number" min={0} max={365}
                   value={policy[type] ?? 0}
                   onChange={(e) => {
                     const val = Math.max(0, Math.min(365, parseInt(e.target.value) || 0));
@@ -401,10 +511,13 @@ function BalancesTab() {
       </div>
 
       {/* Employee balances */}
-      <div className="card">
+      <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Employee Leave Balances — {year}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Based on approved leave requests. Pending requests are not counted.</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Based on approved requests. Click <strong>Customize</strong> on any employee to set individual allowances.
+            <span className="ml-2 text-indigo-500">● custom</span> indicates a personal override.
+          </p>
         </div>
 
         {loading ? (
@@ -420,28 +533,64 @@ function BalancesTab() {
                 <tr className="text-xs text-gray-400 uppercase tracking-wider border-b border-gray-50">
                   <th className="text-left px-5 py-3">Employee</th>
                   {LEAVE_TYPES.map((t) => (
-                    <th key={t} className="text-left px-4 py-3 min-w-[130px]">{typeLabels[t]}</th>
+                    <th key={t} className="text-left px-4 py-3 min-w-[140px]">{typeLabels[t]}</th>
                   ))}
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.balances.map((emp) => (
-                  <tr key={emp.employeeId} className="hover:bg-gray-50/50">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
-                          {emp.name.split(" ").map((n) => n[0]).join("")}
-                        </div>
-                        <span className="font-medium text-gray-900 text-sm">{emp.name}</span>
-                      </div>
-                    </td>
-                    {LEAVE_TYPES.map((type) => (
-                      <td key={type} className="px-4 py-4">
-                        {usagePill(emp.used[type] ?? 0, emp.allowed[type] ?? 0)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+              <tbody>
+                {data.balances.map((emp) => {
+                  const hasCustom = LEAVE_TYPES.some((t) => emp.isCustom[t]);
+                  const isExpanded = expandedEmp === emp.employeeId;
+                  return (
+                    <>
+                      <tr key={emp.employeeId}
+                        className={`border-b border-gray-50 hover:bg-gray-50/50 ${isExpanded ? "bg-indigo-50/30" : ""}`}>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
+                              {emp.name.split(" ").map((n) => n[0]).join("")}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-900 text-sm">{emp.name}</span>
+                              {hasCustom && (
+                                <span className="ml-2 text-xs text-indigo-500 font-medium">● custom</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        {LEAVE_TYPES.map((type) => (
+                          <td key={type} className="px-4 py-4">
+                            {usagePill(emp.used[type] ?? 0, emp.allowed[type] ?? 0, emp.isCustom[type])}
+                          </td>
+                        ))}
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            onClick={() => setExpandedEmp(isExpanded ? null : emp.employeeId)}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                              isExpanded
+                                ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                                : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                            }`}>
+                            {isExpanded ? "Done" : "Customize"}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${emp.employeeId}-editor`}>
+                          <td colSpan={LEAVE_TYPES.length + 2} className="p-0">
+                            <EmpAllowanceEditor
+                              emp={emp}
+                              year={year}
+                              policyDefaults={data.policyDefaults}
+                              onSaved={fetchBalances}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>
