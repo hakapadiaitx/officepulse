@@ -8,6 +8,8 @@ const schema = z.object({
   pin:        z.string().length(4).regex(/^\d{4}$/),
 });
 
+const LEAVE_TYPES = ["ANNUAL", "SICK", "PERSONAL", "OTHER"] as const;
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
@@ -25,13 +27,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const pinValid = await verifyPin(data.pin, employee.pinHash);
     if (!pinValid) return NextResponse.json({ error: "Incorrect PIN. Please try again." }, { status: 401 });
 
-    const leaves = await prisma.leaveRequest.findMany({
-      where: { employeeId: employee.id, tenantId: tenant.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
+    const year = new Date().getFullYear();
+    const yearStart = `${year}-01-01`;
+    const yearEnd   = `${year}-12-31`;
 
-    return NextResponse.json(leaves);
+    const [leaves, policies, empAllowances, approvedLeaves] = await Promise.all([
+      prisma.leaveRequest.findMany({
+        where: { employeeId: employee.id, tenantId: tenant.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.leavePolicy.findMany({ where: { tenantId: tenant.id, year } }),
+      prisma.leaveAllowance.findMany({ where: { tenantId: tenant.id, employeeId: employee.id, year } }),
+      prisma.leaveRequest.findMany({
+        where: {
+          tenantId: tenant.id,
+          employeeId: employee.id,
+          status: "APPROVED",
+          startDate: { lte: yearEnd },
+          endDate:   { gte: yearStart },
+        },
+        select: { startDate: true, endDate: true, type: true },
+      }),
+    ]);
+
+    // Build allowed days: employee override takes priority over policy default
+    const allowed: Record<string, number> = { ANNUAL: 0, SICK: 0, PERSONAL: 0, OTHER: 0 };
+    for (const p of policies) allowed[p.leaveType] = p.allowedDays;
+    for (const a of empAllowances) allowed[a.leaveType] = a.allowedDays;
+
+    // Calculate used days this year per type
+    const used: Record<string, number> = { ANNUAL: 0, SICK: 0, PERSONAL: 0, OTHER: 0 };
+    for (const leave of approvedLeaves) {
+      const effectiveStart = leave.startDate < yearStart ? yearStart : leave.startDate;
+      const effectiveEnd   = leave.endDate   > yearEnd   ? yearEnd   : leave.endDate;
+      const days = Math.round(
+        (new Date(effectiveEnd + "T12:00:00Z").getTime() - new Date(effectiveStart + "T12:00:00Z").getTime()) / 86400000
+      ) + 1;
+      if (days > 0) used[leave.type] = (used[leave.type] ?? 0) + days;
+    }
+
+    const balance: Record<string, { used: number; allowed: number }> = {};
+    for (const type of LEAVE_TYPES) {
+      balance[type] = { used: used[type] ?? 0, allowed: allowed[type] ?? 0 };
+    }
+
+    return NextResponse.json({ leaves, balance, year });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors[0]?.message ?? "Validation error" }, { status: 400 });

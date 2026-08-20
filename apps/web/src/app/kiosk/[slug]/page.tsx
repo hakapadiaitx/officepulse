@@ -529,6 +529,8 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
   const [fetching,    setFetching]    = useState(false);
   const [statusError, setStatusError] = useState("");
   const [myLeaves,    setMyLeaves]    = useState<LeaveRecord[] | null>(null);
+  const [myBalance,   setMyBalance]   = useState<Record<string, { used: number; allowed: number }> | null>(null);
+  const [balanceYear, setBalanceYear] = useState<number | null>(null);
 
   function handleStatusKey(key: string) {
     setStatusError("");
@@ -548,7 +550,9 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
       });
       const data = await res.json();
       if (!res.ok) { setStatusError(data.error ?? "Failed to load."); setStatusPin(""); return; }
-      setMyLeaves(data);
+      setMyLeaves(data.leaves);
+      setMyBalance(data.balance ?? null);
+      setBalanceYear(data.year ?? null);
     } catch {
       setStatusError("Network error. Please try again.");
       setStatusPin("");
@@ -663,42 +667,81 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
                     </button>
                     <button onClick={onClose} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">Cancel</button>
                   </>
-                ) : myLeaves.length === 0 ? (
-                  <div className="text-center py-8 flex flex-col items-center gap-3 text-gray-400">
-                    <CalendarDays className="w-10 h-10 opacity-30" />
-                    <p className="text-sm">No leave requests yet.</p>
-                    <button onClick={() => setTab("new")} className="text-sm font-semibold" style={{ color: brandColor }}>
-                      Submit your first request →
-                    </button>
-                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {myLeaves.map((leave) => {
-                      const days = Math.round(
-                        (new Date(leave.endDate + "T12:00:00Z").getTime() - new Date(leave.startDate + "T12:00:00Z").getTime()) / 86400000
-                      ) + 1;
-                      const sc = leaveStatusConfig[leave.status];
-                      return (
-                        <div key={leave.id} className="rounded-xl border border-gray-100 p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-900">{leaveTypeLabels[leave.type] ?? leave.type}</span>
-                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sc.badge} ${sc.text}`}>{sc.label}</span>
+                    {/* Balance summary */}
+                    {myBalance && (
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Leave Balance {balanceYear}
+                        </p>
+                        {(["ANNUAL","SICK","PERSONAL","OTHER"] as const).map((type) => {
+                          const { used, allowed } = myBalance[type] ?? { used: 0, allowed: 0 };
+                          if (allowed === 0 && used === 0) return null;
+                          const pct = allowed > 0 ? Math.min((used / allowed) * 100, 100) : 0;
+                          const remaining = allowed - used;
+                          const barColor = pct >= 100 ? "bg-red-400" : pct >= 75 ? "bg-amber-400" : "bg-green-500";
+                          const textColor = pct >= 100 ? "text-red-600" : pct >= 75 ? "text-amber-600" : "text-green-700";
+                          return (
+                            <div key={type}>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="text-xs text-gray-600">{leaveTypeLabels[type]}</span>
+                                <span className={`text-xs font-semibold ${textColor}`}>
+                                  {used}/{allowed}d
+                                  {allowed > 0 && (
+                                    <span className="text-gray-400 font-normal ml-1">
+                                      ({remaining > 0 ? `${remaining}d left` : remaining === 0 ? "none left" : `${Math.abs(remaining)}d over`})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Request history */}
+                    {myLeaves && myLeaves.length === 0 ? (
+                      <div className="text-center py-6 flex flex-col items-center gap-3 text-gray-400">
+                        <CalendarDays className="w-10 h-10 opacity-30" />
+                        <p className="text-sm">No leave requests yet.</p>
+                        <button onClick={() => setTab("new")} className="text-sm font-semibold" style={{ color: brandColor }}>
+                          Submit your first request →
+                        </button>
+                      </div>
+                    ) : (
+                      myLeaves && myLeaves.map((leave) => {
+                        const days = Math.round(
+                          (new Date(leave.endDate + "T12:00:00Z").getTime() - new Date(leave.startDate + "T12:00:00Z").getTime()) / 86400000
+                        ) + 1;
+                        const sc = leaveStatusConfig[leave.status];
+                        return (
+                          <div key={leave.id} className="rounded-xl border border-gray-100 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">{leaveTypeLabels[leave.type] ?? leave.type}</span>
+                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${sc.badge} ${sc.text}`}>{sc.label}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">{leave.startDate} → {leave.endDate} · {days} day{days !== 1 ? "s" : ""}</p>
+                            {leave.reason && <p className="text-xs text-gray-400 italic">"{leave.reason}"</p>}
+                            {leave.adminNote && (
+                              <p className={`text-xs rounded-lg px-2.5 py-1.5 ${
+                                leave.status === "REJECTED" ? "bg-red-50 text-red-700" :
+                                leave.status === "APPROVED" ? "bg-green-50 text-green-700" :
+                                "bg-gray-50 text-gray-600"
+                              }`}>
+                                <span className="font-semibold">Admin note:</span> {leave.adminNote}
+                              </p>
+                            )}
                           </div>
-                          <p className="text-xs text-gray-500">{leave.startDate} → {leave.endDate} · {days} day{days !== 1 ? "s" : ""}</p>
-                          {leave.reason && <p className="text-xs text-gray-400 italic">"{leave.reason}"</p>}
-                          {leave.adminNote && (
-                            <p className={`text-xs rounded-lg px-2.5 py-1.5 ${
-                              leave.status === "REJECTED" ? "bg-red-50 text-red-700" :
-                              leave.status === "APPROVED" ? "bg-green-50 text-green-700" :
-                              "bg-gray-50 text-gray-600"
-                            }`}>
-                              <span className="font-semibold">Admin note:</span> {leave.adminNote}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <button onClick={() => { setMyLeaves(null); setStatusPin(""); }}
+                        );
+                      })
+                    )}
+
+                    <button onClick={() => { setMyLeaves(null); setMyBalance(null); setStatusPin(""); }}
                       className="w-full py-2 text-xs text-gray-400 hover:text-gray-600">
                       Check again with different PIN
                     </button>
