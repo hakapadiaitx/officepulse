@@ -687,7 +687,11 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
                           <p className="text-xs text-gray-500">{leave.startDate} → {leave.endDate} · {days} day{days !== 1 ? "s" : ""}</p>
                           {leave.reason && <p className="text-xs text-gray-400 italic">"{leave.reason}"</p>}
                           {leave.adminNote && (
-                            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                            <p className={`text-xs rounded-lg px-2.5 py-1.5 ${
+                              leave.status === "REJECTED" ? "bg-red-50 text-red-700" :
+                              leave.status === "APPROVED" ? "bg-green-50 text-green-700" :
+                              "bg-gray-50 text-gray-600"
+                            }`}>
                               <span className="font-semibold">Admin note:</span> {leave.adminNote}
                             </p>
                           )}

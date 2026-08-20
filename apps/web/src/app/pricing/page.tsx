@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import { CheckCircle, Clock } from "lucide-react";
 import { PLANS } from "@/lib/stripe";
 
+const yearlyDiscount = Math.round((1 - PLANS[0].priceYearly / (PLANS[0].priceMonthly * 12)) * 100);
+
 export default function PricingPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -80,7 +82,7 @@ export default function PricingPage() {
               onClick={() => setInterval("yearly")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${interval === "yearly" ? "bg-brand-600 text-white" : "text-gray-600 hover:text-gray-900"}`}
             >
-              Yearly <span className="text-green-600 font-semibold ml-1">-17%</span>
+              Yearly <span className="text-green-600 font-semibold ml-1">-{yearlyDiscount}%</span>
             </button>
           </div>
         </div>

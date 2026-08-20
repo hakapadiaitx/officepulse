@@ -10,6 +10,13 @@ const EmployeeChart = dynamic(() => import("@/components/reports/EmployeeChart")
 
 type Period = "day" | "week" | "month" | "quarter";
 
+const leaveTypeLabels: Record<string, string> = {
+  ANNUAL: "Annual Leave",
+  SICK: "Sick Leave",
+  PERSONAL: "Personal Leave",
+  OTHER: "Other",
+};
+
 interface Summary {
   totalSessions: number;
   totalEmployees: number;
@@ -279,7 +286,7 @@ export default function ReportsPage() {
                           <CalendarDays className="w-3 h-3" />
                           On Leave: <strong>{emp.leaveDays} day{emp.leaveDays !== 1 ? "s" : ""}</strong>
                           {Object.entries(emp.leaveByType).map(([t, d]) => (
-                            <span key={t} className="text-gray-400">({t.charAt(0) + t.slice(1).toLowerCase()}: {d}d)</span>
+                            <span key={t} className="text-gray-400">({leaveTypeLabels[t] ?? t}: {d}d)</span>
                           ))}
                         </span>
                       )}
