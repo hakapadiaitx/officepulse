@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { Plus, X, Check, Trash2, ChevronDown } from "lucide-react";
+import { Plus, X, Check, Trash2, ChevronDown, Save, ChevronLeft, ChevronRight } from "lucide-react";
 
 type LeaveType   = "ANNUAL" | "SICK" | "PERSONAL" | "OTHER";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -25,12 +25,27 @@ interface Employee {
   lastName: string;
 }
 
+interface EmployeeBalance {
+  employeeId: string;
+  name: string;
+  used: Record<string, number>;
+  allowed: Record<string, number>;
+}
+
+interface BalancesData {
+  year: number;
+  allowances: Record<string, number>;
+  balances: EmployeeBalance[];
+}
+
 const typeLabels: Record<LeaveType, string> = {
   ANNUAL: "Annual Leave",
   SICK: "Sick Leave",
-  PERSONAL: "Personal",
+  PERSONAL: "Personal Leave",
   OTHER: "Other",
 };
+
+const LEAVE_TYPES: LeaveType[] = ["ANNUAL", "SICK", "PERSONAL", "OTHER"];
 
 const statusConfig: Record<LeaveStatus, { label: string; badge: string; text: string }> = {
   PENDING:  { label: "Pending",  badge: "bg-amber-100",  text: "text-amber-700"  },
@@ -38,7 +53,7 @@ const statusConfig: Record<LeaveStatus, { label: string; badge: string; text: st
   REJECTED: { label: "Rejected", badge: "bg-red-100",    text: "text-red-700"    },
 };
 
-const tabs: { key: string; label: string }[] = [
+const requestTabs: { key: string; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "PENDING", label: "Pending" },
   { key: "APPROVED", label: "Approved" },
@@ -49,7 +64,7 @@ const tabs: { key: string; label: string }[] = [
 interface NewLeaveModalProps {
   employees: Employee[];
   onClose: () => void;
-  onCreated: () => void;   // refreshes list, does NOT close modal
+  onCreated: () => void;
 }
 
 function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
@@ -76,12 +91,11 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "Failed to create"); }
       const result = await res.json();
-      onCreated(); // refresh list
+      onCreated();
       if (!result.emailSent) {
         setError(`Request created but admin notification failed — ${result.emailError ?? "unknown error"} (tried sending to: ${result.emailTo ?? "no owner email found"})`);
-        // keep modal open so the error is visible
       } else {
-        onClose(); // success — close modal
+        onClose();
       }
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -95,9 +109,7 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">New Leave Request</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="px-6 py-5 space-y-4">
@@ -125,37 +137,24 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
           <div>
             <label className="label">Leave Type</label>
             <select value={type} onChange={(e) => setType(e.target.value as LeaveType)} className="input">
-              {(Object.entries(typeLabels) as [LeaveType, string][]).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+              {LEAVE_TYPES.map((k) => <option key={k} value={k}>{typeLabels[k]}</option>)}
             </select>
           </div>
 
           <div>
             <label className="label">Reason <span className="text-gray-400">(optional)</span></label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Add a note…"
-              rows={2}
-              className="input resize-none"
-            />
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Add a note…" rows={2} className="input resize-none" />
           </div>
 
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="flex gap-3 pt-1">
-            <button
-              onClick={submit}
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-brand-700 transition-colors"
-            >
+            <button onClick={submit} disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-brand-700 transition-colors">
               {saving ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
               Create Request
             </button>
-            <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
-              Cancel
-            </button>
+            <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
           </div>
         </div>
       </div>
@@ -163,7 +162,7 @@ function NewLeaveModal({ employees, onClose, onCreated }: NewLeaveModalProps) {
   );
 }
 
-// ── Action Popover (approve / reject with note) ────────────────────────────────
+// ── Action Row ─────────────────────────────────────────────────────────────────
 interface ActionRowProps {
   leave: LeaveRequest;
   onUpdated: () => void;
@@ -211,15 +210,12 @@ function ActionRow({ leave, onUpdated }: ActionRowProps) {
 
   return (
     <div className="flex items-center justify-between px-5 py-4">
-      {/* Employee + dates */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
             {leave.employee.firstName[0]}{leave.employee.lastName[0]}
           </div>
-          <p className="font-medium text-gray-900 truncate">
-            {leave.employee.firstName} {leave.employee.lastName}
-          </p>
+          <p className="font-medium text-gray-900 truncate">{leave.employee.firstName} {leave.employee.lastName}</p>
         </div>
         <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 ml-10">
           <span>{format(new Date(leave.startDate + "T12:00:00Z"), "MMM d")} – {format(new Date(leave.endDate + "T12:00:00Z"), "MMM d, yyyy")}</span>
@@ -231,60 +227,225 @@ function ActionRow({ leave, onUpdated }: ActionRowProps) {
         </div>
       </div>
 
-      {/* Status + actions */}
       <div className="flex items-center gap-2 ml-4 flex-shrink-0">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.badge} ${cfg.text}`}>{cfg.label}</span>
 
         <div className="relative">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={() => setOpen((o) => !o)}
+            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
             <ChevronDown className="w-4 h-4" />
           </button>
 
           {open && (
             <div className="absolute right-0 top-8 z-20 w-64 bg-white rounded-xl shadow-xl border border-gray-100 p-3 space-y-2">
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Admin note (optional)"
-                rows={2}
-                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)}
+                placeholder="Admin note (optional)" rows={2}
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-brand-500" />
               <div className="flex gap-2">
-                <button
-                  onClick={() => update("APPROVED")}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
+                <button onClick={() => update("APPROVED")} disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50">
                   <Check className="w-3 h-3" /> Approve
                 </button>
-                <button
-                  onClick={() => update("REJECTED")}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50"
-                >
+                <button onClick={() => update("REJECTED")} disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50">
                   <X className="w-3 h-3" /> Reject
                 </button>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="w-full text-xs text-gray-400 hover:text-gray-600 text-center py-0.5"
-              >
-                Cancel
-              </button>
+              <button onClick={() => setOpen(false)} className="w-full text-xs text-gray-400 hover:text-gray-600 text-center py-0.5">Cancel</button>
             </div>
           )}
         </div>
 
-        <button
-          onClick={remove}
-          disabled={deleting}
-          className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
-        >
+        <button onClick={remove} disabled={deleting}
+          className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40">
           <Trash2 className="w-4 h-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Balances Tab ───────────────────────────────────────────────────────────────
+function BalancesTab() {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [data, setData] = useState<BalancesData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Policy editor state
+  const [policy, setPolicy] = useState<Record<string, number>>({ ANNUAL: 0, SICK: 0, PERSONAL: 0, OTHER: 0 });
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyMsg, setPolicyMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const fetchBalances = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/leaves/balances?year=${year}`);
+    if (res.ok) {
+      const d: BalancesData = await res.json();
+      setData(d);
+      setPolicy({ ...d.allowances });
+    }
+    setLoading(false);
+  }, [year]);
+
+  useEffect(() => { fetchBalances(); }, [fetchBalances]);
+
+  async function savePolicy() {
+    setPolicySaving(true);
+    setPolicyMsg(null);
+    try {
+      const res = await fetch("/api/settings/leave-policy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, policies: policy }),
+      });
+      if (res.ok) {
+        setPolicyMsg({ type: "ok", text: "Policy saved." });
+        fetchBalances();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setPolicyMsg({ type: "err", text: d.error ?? "Failed to save." });
+      }
+    } catch {
+      setPolicyMsg({ type: "err", text: "Network error." });
+    } finally {
+      setPolicySaving(false);
+    }
+  }
+
+  function usagePill(used: number, allowed: number) {
+    if (allowed === 0) return <span className="text-xs text-gray-400">—</span>;
+    const pct = allowed > 0 ? (used / allowed) * 100 : 0;
+    const remaining = allowed - used;
+    const color =
+      pct >= 100 ? "text-red-600 bg-red-50" :
+      pct >= 75  ? "text-amber-600 bg-amber-50" :
+                   "text-green-700 bg-green-50";
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>
+            {used}/{allowed}d
+          </span>
+          {remaining > 0
+            ? <span className="text-xs text-gray-400">{remaining}d left</span>
+            : remaining === 0
+            ? <span className="text-xs text-red-500">none left</span>
+            : <span className="text-xs text-red-600 font-semibold">{Math.abs(remaining)}d over</span>}
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full ${pct >= 100 ? "bg-red-400" : pct >= 75 ? "bg-amber-400" : "bg-green-500"}`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Year navigator */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setYear((y) => y - 1)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="text-lg font-bold text-gray-900 min-w-[60px] text-center">{year}</span>
+        <button onClick={() => setYear((y) => y + 1)} disabled={year >= currentYear + 1}
+          className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 disabled:opacity-30">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Policy editor */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900">Leave Policy — {year}</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Set the number of allowed days per leave type for all employees.</p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {LEAVE_TYPES.map((type) => (
+            <div key={type}>
+              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{typeLabels[type]}</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={policy[type] ?? 0}
+                  onChange={(e) => {
+                    const val = Math.max(0, Math.min(365, parseInt(e.target.value) || 0));
+                    setPolicy((p) => ({ ...p, [type]: val }));
+                    setPolicyMsg(null);
+                  }}
+                  className="input pr-8"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">days</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {policyMsg && (
+          <p className={`text-sm px-3 py-2 rounded-lg border ${policyMsg.type === "err" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+            {policyMsg.text}
+          </p>
+        )}
+
+        <button onClick={savePolicy} disabled={policySaving}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 disabled:opacity-50 transition-colors">
+          {policySaving ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+          Save Policy
+        </button>
+      </div>
+
+      {/* Employee balances */}
+      <div className="card">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Employee Leave Balances — {year}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Based on approved leave requests. Pending requests are not counted.</p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !data || data.balances.length === 0 ? (
+          <p className="text-center text-gray-400 py-10 text-sm">No active employees found.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase tracking-wider border-b border-gray-50">
+                  <th className="text-left px-5 py-3">Employee</th>
+                  {LEAVE_TYPES.map((t) => (
+                    <th key={t} className="text-left px-4 py-3 min-w-[130px]">{typeLabels[t]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {data.balances.map((emp) => (
+                  <tr key={emp.employeeId} className="hover:bg-gray-50/50">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
+                          {emp.name.split(" ").map((n) => n[0]).join("")}
+                        </div>
+                        <span className="font-medium text-gray-900 text-sm">{emp.name}</span>
+                      </div>
+                    </td>
+                    {LEAVE_TYPES.map((type) => (
+                      <td key={type} className="px-4 py-4">
+                        {usagePill(emp.used[type] ?? 0, emp.allowed[type] ?? 0)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -296,6 +457,7 @@ export default function LeavesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState("ALL");
+  const [mainTab,   setMainTab]   = useState<"requests" | "balances">("requests");
   const [showNew,   setShowNew]   = useState(false);
 
   async function fetchLeaves() {
@@ -321,58 +483,68 @@ export default function LeavesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leave Requests</h1>
-          {pendingCount > 0 && tab === "ALL" && (
+          <h1 className="text-2xl font-bold text-gray-900">Leave Management</h1>
+          {pendingCount > 0 && mainTab === "requests" && tab === "ALL" && (
             <p className="text-sm text-amber-600 mt-0.5">{pendingCount} pending request{pendingCount > 1 ? "s" : ""} awaiting action</p>
           )}
         </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> New Request
-        </button>
+        {mainTab === "requests" && (
+          <button onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="w-4 h-4" /> New Request
+          </button>
+        )}
       </div>
 
-      {/* Tabs */}
+      {/* Main tabs: Requests / Balances */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.label}
+        {([["requests", "Requests"], ["balances", "Leave Balances"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setMainTab(key)}
+            className={`px-5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              mainTab === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}>
+            {label}
           </button>
         ))}
       </div>
 
-      <div className="card">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : leaves.length === 0 ? (
-          <p className="text-center text-gray-400 py-10 text-sm">
-            {tab === "ALL" ? "No leave requests yet. Create one to get started." : `No ${tab.toLowerCase()} requests.`}
-          </p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {leaves.map((leave) => (
-              <ActionRow key={leave.id} leave={leave} onUpdated={fetchLeaves} />
+      {mainTab === "balances" ? (
+        <BalancesTab />
+      ) : (
+        <>
+          {/* Status filter tabs */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+            {requestTabs.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  tab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}>
+                {t.label}
+              </button>
             ))}
           </div>
-        )}
-      </div>
+
+          <div className="card">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : leaves.length === 0 ? (
+              <p className="text-center text-gray-400 py-10 text-sm">
+                {tab === "ALL" ? "No leave requests yet. Create one to get started." : `No ${tab.toLowerCase()} requests.`}
+              </p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {leaves.map((leave) => (
+                  <ActionRow key={leave.id} leave={leave} onUpdated={fetchLeaves} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {showNew && (
-        <NewLeaveModal
-          employees={employees}
-          onClose={() => setShowNew(false)}
-          onCreated={fetchLeaves}
-        />
+        <NewLeaveModal employees={employees} onClose={() => setShowNew(false)} onCreated={fetchLeaves} />
       )}
     </div>
   );
