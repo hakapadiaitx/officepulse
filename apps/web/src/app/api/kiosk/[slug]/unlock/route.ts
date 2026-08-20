@@ -26,25 +26,39 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const valid = await verifyPin(pin, tenant.kioskPinHash);
     if (!valid) return NextResponse.json({ error: "Incorrect PIN. Please try again." }, { status: 401 });
 
-    const todayStart = localDate
-      ? new Date(localDate + "T00:00:00.000Z")
-      : new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
-    const employees = await prisma.employee.findMany({
-      where: { tenantId: tenant.id, isActive: true },
-      include: {
-        attendanceLogs: {
-          where: { checkInTime: { gte: todayStart } },
-          orderBy: { checkInTime: "desc" },
-          take: 1,
+    const todayStr = localDate ?? new Date().toISOString().slice(0, 10);
+    const todayStart = new Date(todayStr + "T00:00:00.000Z");
+
+    const [employees, approvedLeaves] = await Promise.all([
+      prisma.employee.findMany({
+        where: { tenantId: tenant.id, isActive: true },
+        include: {
+          attendanceLogs: {
+            where: { checkInTime: { gte: todayStart } },
+            orderBy: { checkInTime: "desc" },
+            take: 1,
+          },
         },
-      },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    });
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      }),
+      prisma.leaveRequest.findMany({
+        where: {
+          tenantId: tenant.id,
+          status: "APPROVED",
+          startDate: { lte: todayStr },
+          endDate:   { gte: todayStr },
+        },
+        select: { employeeId: true },
+      }),
+    ]);
+
+    const onLeaveIds = new Set(approvedLeaves.map((l) => l.employeeId));
 
     const list = employees.map((emp) => {
       const log = emp.attendanceLogs[0] ?? null;
-      let status: "not_arrived" | "in" | "out" | "left";
-      if (!log) status = "not_arrived";
+      let status: "not_arrived" | "in" | "out" | "left" | "on_leave";
+      if (!log && onLeaveIds.has(emp.id)) status = "on_leave";
+      else if (!log) status = "not_arrived";
       else if (!log.checkOutTime) status = "in";
       else if (log.isEndOfDay) status = "left";
       else status = "out";
