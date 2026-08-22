@@ -789,6 +789,15 @@ export default function KioskPage() {
   // Leave request modal
   const [leaveEmployee, setLeaveEmployee] = useState<Employee | null>(null);
 
+  // Kiosk main view
+  const [kioskView, setKioskView] = useState<"attendance" | "upcoming">("attendance");
+
+  // Upcoming leaves
+  interface UpcomingDay { date: string; employees: { name: string; type: string; startDate: string; endDate: string }[] }
+  const [upcomingLeaves, setUpcomingLeaves] = useState<UpcomingDay[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(false);
+  const [upcomingLoaded, setUpcomingLoaded]   = useState(false);
+
   const todayDate = format(new Date(), "yyyy-MM-dd");
 
   // Load branding from status endpoint (public, no PIN needed)
@@ -811,6 +820,20 @@ export default function KioskPage() {
     if (res.ok) {
       const d = await res.json();
       setEmployees(d.employees ?? []);
+    }
+  }, [slug]);
+
+  const fetchUpcomingLeaves = useCallback(async () => {
+    setUpcomingLoading(true);
+    try {
+      const res = await fetch(`/api/kiosk/${slug}/upcoming-leaves`);
+      if (res.ok) {
+        const d = await res.json();
+        setUpcomingLeaves(d.days ?? []);
+        setUpcomingLoaded(true);
+      }
+    } finally {
+      setUpcomingLoading(false);
     }
   }, [slug]);
 
@@ -1027,8 +1050,91 @@ export default function KioskPage() {
         })}
       </div>
 
+      {/* View toggle */}
+      <div className="max-w-5xl mx-auto w-full px-6 pt-5">
+        <div className="flex gap-1 bg-gray-200 rounded-xl p-1 w-fit">
+          {([["attendance", "Attendance"], ["upcoming", "Upcoming Leaves"]] as const).map(([key, label]) => (
+            <button key={key}
+              onClick={() => {
+                setKioskView(key);
+                if (key === "upcoming" && !upcomingLoaded) fetchUpcomingLeaves();
+              }}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                kioskView === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"
+              }`}>
+              {key === "upcoming" && <CalendarDays className="w-3.5 h-3.5" />}
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {kioskView === "upcoming" ? (
+        /* ── Upcoming Leaves view ── */
+        <div className="max-w-5xl mx-auto w-full p-6">
+          {upcomingLoading ? (
+            <div className="flex justify-center py-20">
+              <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${brandColor}40`, borderTopColor: brandColor }} />
+            </div>
+          ) : upcomingLeaves.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p className="font-medium">No approved leaves in the next 30 days</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {upcomingLeaves.map(({ date, employees: emps }) => {
+                const d = new Date(date + "T12:00:00Z");
+                const today = new Date(); today.setHours(0,0,0,0);
+                const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+                const typeLabel: Record<string, string> = { ANNUAL:"Annual", SICK:"Sick", PERSONAL:"Personal", OTHER:"Other" };
+                const typeClr: Record<string, string>   = { ANNUAL:"bg-indigo-100 text-indigo-700", SICK:"bg-red-100 text-red-700", PERSONAL:"bg-amber-100 text-amber-700", OTHER:"bg-gray-100 text-gray-600" };
+                const relative = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : `In ${diff} days`;
+                return (
+                  <div key={date} className="card p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                        style={{ backgroundColor: brandColor }}>
+                        {d.getUTCDate()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })}
+                        </p>
+                        <p className="text-xs text-gray-400">{relative} · {emps.length} employee{emps.length > 1 ? "s" : ""} out</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {emps.map((emp, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                              style={{ backgroundColor: brandColor }}>
+                              {emp.name.split(" ").map((n) => n[0]).join("").slice(0,2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{emp.name}</p>
+                              {emp.startDate !== emp.endDate && (
+                                <p className="text-xs text-gray-400">{emp.startDate} → {emp.endDate}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${typeClr[emp.type] ?? typeClr.OTHER}`}>
+                            {typeLabel[emp.type] ?? emp.type}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Search */}
-      <div className="max-w-5xl mx-auto w-full px-6 pt-6">
+      <div className="max-w-5xl mx-auto w-full px-6 pt-4">
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
@@ -1135,6 +1241,8 @@ export default function KioskPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Action modal */}
       {selected && (

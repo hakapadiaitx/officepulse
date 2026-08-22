@@ -1,7 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { format } from "date-fns";
-import { Plus, X, Check, Trash2, ChevronDown, Save, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  format, addMonths, subMonths, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth,
+  isToday, parseISO,
+} from "date-fns";
+import { Plus, X, Check, Trash2, ChevronDown, Save, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 
 type LeaveType   = "ANNUAL" | "SICK" | "PERSONAL" | "OTHER";
 type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -377,6 +381,175 @@ function EmpAllowanceEditor({ emp, year, policyDefaults, onSaved }: EmpAllowance
   );
 }
 
+// ── Calendar Tab ───────────────────────────────────────────────────────────────
+interface CalendarLeave {
+  id: string;
+  employeeId: string;
+  name: string;
+  initials: string;
+  startDate: string;
+  endDate: string;
+  type: string;
+}
+
+const typeColors: Record<string, string> = {
+  ANNUAL:   "bg-indigo-100 text-indigo-700",
+  SICK:     "bg-red-100 text-red-700",
+  PERSONAL: "bg-amber-100 text-amber-700",
+  OTHER:    "bg-gray-100 text-gray-600",
+};
+
+function CalendarTab() {
+  const [month, setMonth] = useState(() => new Date());
+  const [leaves, setLeaves] = useState<CalendarLeave[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null); // YYYY-MM-DD
+
+  useEffect(() => {
+    const start = format(startOfMonth(month), "yyyy-MM-dd");
+    const end   = format(endOfMonth(month),   "yyyy-MM-dd");
+    setLoading(true);
+    setSelected(null);
+    fetch(`/api/leaves/calendar?start=${start}&end=${end}`)
+      .then((r) => r.json())
+      .then((d) => { setLeaves(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [month]);
+
+  // Build a map: date string → leaves active on that day
+  const dayLeaves: Record<string, CalendarLeave[]> = {};
+  for (const leave of leaves) {
+    const start = parseISO(leave.startDate);
+    const end   = parseISO(leave.endDate);
+    const cur   = new Date(start);
+    while (cur <= end) {
+      const d = format(cur, "yyyy-MM-dd");
+      if (!dayLeaves[d]) dayLeaves[d] = [];
+      dayLeaves[d].push(leave);
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+
+  // Build 6-week grid starting from the Monday of the first week of the month
+  const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
+  const gridEnd   = endOfWeek(endOfMonth(month),     { weekStartsOn: 1 });
+  const days      = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+  const selectedLeaves = selected ? (dayLeaves[selected] ?? []) : [];
+
+  return (
+    <div className="space-y-4">
+      {/* Month navigator */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => setMonth((m) => subMonths(m, 1))}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <h2 className="font-semibold text-gray-900">{format(month, "MMMM yyyy")}</h2>
+          <button onClick={() => setMonth((m) => addMonths(m, 1))}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+            <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>
+          ))}
+        </div>
+
+        {/* Day grid */}
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden">
+            {days.map((day) => {
+              const key  = format(day, "yyyy-MM-dd");
+              const here = dayLeaves[key] ?? [];
+              const inMonth  = isSameMonth(day, month);
+              const today    = isToday(day);
+              const isSelected = selected === key;
+
+              return (
+                <button key={key}
+                  onClick={() => setSelected(isSelected ? null : key)}
+                  className={`bg-white p-1.5 min-h-[70px] text-left flex flex-col transition-colors ${
+                    !inMonth ? "opacity-30" : ""
+                  } ${isSelected ? "ring-2 ring-inset ring-indigo-500" : "hover:bg-gray-50"}`}
+                >
+                  <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full mb-1 ${
+                    today ? "bg-indigo-600 text-white" : inMonth ? "text-gray-700" : "text-gray-400"
+                  }`}>
+                    {format(day, "d")}
+                  </span>
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    {here.slice(0, 3).map((l) => (
+                      <span key={l.id} className={`text-[10px] font-medium px-1 rounded leading-tight truncate ${typeColors[l.type] ?? typeColors.OTHER}`}>
+                        {l.initials}
+                      </span>
+                    ))}
+                    {here.length > 3 && (
+                      <span className="text-[10px] text-gray-400">+{here.length - 3} more</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3">
+        {(Object.entries({ ANNUAL: "Annual Leave", SICK: "Sick Leave", PERSONAL: "Personal Leave", OTHER: "Other" })).map(([k, label]) => (
+          <div key={k} className="flex items-center gap-1.5">
+            <span className={`w-3 h-3 rounded-sm ${typeColors[k].split(" ")[0]}`} />
+            <span className="text-xs text-gray-500">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail panel for selected day */}
+      {selected && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900">
+              {format(parseISO(selected), "EEEE, MMMM d yyyy")}
+            </h3>
+            <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {selectedLeaves.length === 0 ? (
+            <p className="text-sm text-gray-400">No approved leaves on this day.</p>
+          ) : (
+            <div className="space-y-2">
+              {selectedLeaves.map((l) => (
+                <div key={l.id} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
+                    {l.initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{l.name}</p>
+                    <p className="text-xs text-gray-500">{typeLabels[l.type as LeaveType] ?? l.type} · {l.startDate} → {l.endDate}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${typeColors[l.type] ?? typeColors.OTHER}`}>
+                    {typeLabels[l.type as LeaveType] ?? l.type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Balances Tab ───────────────────────────────────────────────────────────────
 function BalancesTab() {
   const currentYear = new Date().getFullYear();
@@ -606,7 +779,7 @@ export default function LeavesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState("ALL");
-  const [mainTab,   setMainTab]   = useState<"requests" | "balances">("requests");
+  const [mainTab,   setMainTab]   = useState<"requests" | "balances" | "calendar">("requests");
   const [showNew,   setShowNew]   = useState(false);
 
   async function fetchLeaves() {
@@ -642,11 +815,17 @@ export default function LeavesPage() {
             <Plus className="w-4 h-4" /> New Request
           </button>
         )}
+        {mainTab === "calendar" && (
+          <div className="flex items-center gap-1.5 text-sm text-gray-400">
+            <Calendar className="w-4 h-4" />
+            Approved leaves only
+          </div>
+        )}
       </div>
 
-      {/* Main tabs: Requests / Balances */}
+      {/* Main tabs: Requests / Calendar / Balances */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {([["requests", "Requests"], ["balances", "Leave Balances"]] as const).map(([key, label]) => (
+        {([["requests", "Requests"], ["calendar", "Calendar"], ["balances", "Leave Balances"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setMainTab(key)}
             className={`px-5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               mainTab === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -656,7 +835,9 @@ export default function LeavesPage() {
         ))}
       </div>
 
-      {mainTab === "balances" ? (
+      {mainTab === "calendar" ? (
+        <CalendarTab />
+      ) : mainTab === "balances" ? (
         <BalancesTab />
       ) : (
         <>
