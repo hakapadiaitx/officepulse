@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { InstallBanner } from "@/components/kiosk/InstallBanner";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -49,6 +50,7 @@ export default function KioskLayout({ children }: { children: React.ReactNode })
       `}</style>
       {children}
       <InstallBanner />
+      <ServiceWorkerRegister />
     </>
   );
 }

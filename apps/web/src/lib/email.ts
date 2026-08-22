@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import QRCode from "qrcode";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -14,6 +15,7 @@ interface WelcomeEmailParams {
   loginUrl: string;
   kioskUrl: string;
   trialEndsAt: Date;
+  kioskQrDataUrl?: string;
 }
 
 interface NotificationEmailParams {
@@ -79,12 +81,39 @@ function welcomeHtml(p: WelcomeEmailParams): string {
             </td></tr>
           </table>
 
+          <!-- Kiosk QR section -->
+          ${p.kioskQrDataUrl ? `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:32px;">
+            <tr><td style="padding:20px 24px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Set up your kiosk terminal</p>
+              <p style="margin:0 0 16px;font-size:13px;color:#374151;line-height:1.5;">Scan this QR code on any tablet, phone, or PC to open the employee attendance terminal. Add it to the home screen for a full-screen kiosk experience.</p>
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td style="vertical-align:top;">
+                  <img src="${p.kioskQrDataUrl}" width="120" height="120" alt="Kiosk QR Code" style="display:block;border-radius:8px;border:1px solid #e5e7eb;" />
+                </td>
+                <td style="padding-left:20px;vertical-align:top;">
+                  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#111827;">iPhone / iPad</p>
+                  <p style="margin:0 0 12px;font-size:12px;color:#6b7280;line-height:1.5;">Tap Share → <em>Add to Home Screen</em></p>
+                  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#111827;">Android</p>
+                  <p style="margin:0 0 12px;font-size:12px;color:#6b7280;line-height:1.5;">Tap browser menu → <em>Add to Home Screen</em></p>
+                  <p style="margin:0;font-size:11px;font-family:monospace;color:#4f46e5;">${p.kioskUrl}</p>
+                </td>
+              </tr></table>
+            </td></tr>
+          </table>` : `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:32px;">
+            <tr><td style="padding:16px 20px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Kiosk terminal</p>
+              <p style="margin:0;font-size:13px;font-family:monospace;color:#4f46e5;">${p.kioskUrl}</p>
+            </td></tr>
+          </table>`}
+
           <!-- Steps -->
           <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#111827;">Get started in 3 steps:</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
             ${[
               ["1", "Add your employees", "Go to Employees → Add Employee. Each person gets a 4-digit PIN they use at the kiosk."],
-              ["2", "Share the kiosk link", "Display the kiosk URL on a shared tablet or screen near your entrance. No login needed."],
+              ["2", "Deploy the kiosk", "Open the kiosk URL on a tablet or PC near your entrance. Install it as an app for the best experience."],
               ["3", "Track attendance", "Employees tap Arrive, Check Out, Return, or Leave for Day using their PIN. You see it live on your dashboard."],
             ].map(([n, title, desc]) => `
             <tr><td style="padding:8px 0;">
@@ -162,13 +191,25 @@ export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<void
     return;
   }
 
+  let kioskQrDataUrl: string | undefined;
+  try {
+    kioskQrDataUrl = await QRCode.toDataURL(params.kioskUrl, {
+      errorCorrectionLevel: "M",
+      width: 240,
+      margin: 1,
+      color: { dark: "#111827", light: "#ffffff" },
+    });
+  } catch {
+    // Non-fatal — email sends without QR if generation fails
+  }
+
   const from = process.env.EMAIL_FROM ?? "OfficePulse <onboarding@resend.dev>";
 
   const { error } = await resend.emails.send({
     from,
     to: params.to,
     subject: `Welcome to OfficePulse — ${params.companyName} workspace is ready`,
-    html: welcomeHtml(params),
+    html: welcomeHtml({ ...params, kioskQrDataUrl }),
   });
 
   if (error) console.error("[email] Welcome email failed:", error);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { BRAND_COLORS } from "@/lib/brand";
 
 function TestEmailButton({ userEmail }: { userEmail?: string }) {
@@ -413,10 +414,12 @@ export default function SettingsPage() {
       <div className="card p-6">
         <h2 className="font-semibold text-gray-900 mb-1">Employee Attendance Terminal</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Share this link with your employees or display it on a shared screen/tablet.
-          No login is required — employees identify themselves with their PIN.
+          Share this link or QR code with your employees. Display it on a tablet or screen near your entrance.
+          No login is required — employees identify themselves with their 4-digit PIN.
         </p>
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+
+        {/* URL bar + copy */}
+        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 mb-3">
           <p className="text-sm font-mono text-gray-700 flex-1 truncate">{kioskUrl}</p>
           <button
             onClick={copyKioskUrl}
@@ -427,18 +430,45 @@ export default function SettingsPage() {
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
-        <div className="flex gap-3 mt-3">
-          <Link
-            href={`/kiosk/${user?.tenantSlug}`}
-            target="_blank"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
-            style={{ backgroundColor: brandColor }}
-          >
-            Open Terminal <ExternalLink className="w-4 h-4" />
-          </Link>
-        </div>
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-          <strong>How it works:</strong> Employees can Arrive, Check Out (temporary), Return, or Leave for Day — all authenticated by their private 4-digit PIN.
+
+        {/* QR code + install instructions */}
+        <div className="flex flex-col sm:flex-row gap-6 items-start mt-4">
+          <div className="flex-shrink-0 p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
+            <QRCodeSVG
+              value={kioskUrl}
+              size={140}
+              bgColor="#ffffff"
+              fgColor="#111827"
+              level="M"
+            />
+          </div>
+          <div className="flex-1 space-y-3">
+            <p className="text-sm font-semibold text-gray-900">Set up kiosk on a device</p>
+            <ol className="space-y-2 text-sm text-gray-600">
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+                <span>Scan the QR code or open the link on a tablet, phone, or PC.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+                <span><strong>iPhone/iPad:</strong> tap Share → <em>Add to Home Screen</em>. <strong>Android:</strong> tap the browser menu → <em>Add to Home Screen</em> or <em>Install App</em>.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+                <span>Launch from the home screen — it opens full-screen, no browser chrome.</span>
+              </li>
+            </ol>
+            <div className="flex gap-3 pt-1">
+              <Link
+                href={`/kiosk/${user?.tenantSlug}`}
+                target="_blank"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+                style={{ backgroundColor: brandColor }}
+              >
+                Open Terminal <ExternalLink className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 
