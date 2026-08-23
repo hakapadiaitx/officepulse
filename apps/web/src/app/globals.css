@@ -6,6 +6,13 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+    /* Default brand palette (indigo — overridden at runtime by BrandColorProvider) */
+    --brand-50:  238 242 255;
+    --brand-100: 224 231 255;
+    --brand-500: 99  102 241;
+    --brand-600: 79  70  229;
+    --brand-700: 67  56  202;
+    --brand-900: 49  46  129;
   }
   body {
     @apply bg-gray-50 text-gray-900 antialiased;

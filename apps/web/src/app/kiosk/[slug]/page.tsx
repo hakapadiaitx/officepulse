@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays } from "lucide-react";
 import Image from "next/image";
+import { BrandColorInjector } from "@/components/layout/BrandColorProvider";
 
 type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
 type Action = "arrive" | "checkout" | "return" | "leave";
@@ -987,6 +988,7 @@ export default function KioskPage() {
   if (!unlocked) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
+        <BrandColorInjector color={brandColor} />
         <Header />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="w-full max-w-xs">
@@ -1037,6 +1039,7 @@ export default function KioskPage() {
   // ── Employee list (unlocked) ───────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <BrandColorInjector color={brandColor} />
       <Header />
 
       {/* Stats strip */}

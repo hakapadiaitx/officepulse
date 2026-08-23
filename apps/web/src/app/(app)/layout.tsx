@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { AppProviders } from "@/components/layout/AppProviders";
+import { BrandColorProvider } from "@/components/layout/BrandColorProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppProviders>
+      <BrandColorProvider />
       <div className="flex h-screen bg-gray-50">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
