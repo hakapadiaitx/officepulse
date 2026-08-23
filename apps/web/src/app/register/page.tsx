@@ -97,7 +97,7 @@ function RegisterForm() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block mb-4">
-            <Image src="/logo.jpg" alt="OfficePulse" width={200} height={60} className="h-14 w-auto mx-auto" priority />
+            <Image src="/logo.PNG" alt="OfficePulse" width={200} height={60} className="h-14 w-auto mx-auto" priority />
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Create your workspace</h1>
           <p className="text-gray-500 text-sm mt-1">14-day free trial, no credit card needed</p>

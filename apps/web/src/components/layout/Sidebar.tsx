@@ -29,7 +29,7 @@ export function Sidebar() {
       <div className="px-4 py-4 flex items-center gap-3" style={{ backgroundColor: brandColor }}>
         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 p-0.5 shadow-sm">
           <Image
-            src={logoUrl || "/logo.jpg"}
+            src={logoUrl || "/logo.PNG"}
             alt="Logo"
             width={40} height={40}
             className="w-full h-full object-contain"

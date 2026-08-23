@@ -14,7 +14,7 @@ export default function LandingPage() {
       <nav className="border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-10">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/">
-            <Image src="/logo.jpg" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" priority />
+            <Image src="/logo.PNG" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" priority />
           </Link>
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
@@ -373,7 +373,7 @@ export default function LandingPage() {
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-100 py-10">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <Image src="/logo.jpg" alt="OfficePulse" width={120} height={36} className="h-8 w-auto" />
+          <Image src="/logo.PNG" alt="OfficePulse" width={120} height={36} className="h-8 w-auto" />
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/pricing" className="hover:text-gray-600 transition-colors">Pricing</Link>
             <Link href="/login" className="hover:text-gray-600 transition-colors">Sign in</Link>

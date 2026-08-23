@@ -37,7 +37,7 @@ function welcomeHtml(p: WelcomeEmailParams): string {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
         <!-- Header -->
         <tr><td style="background:#4f46e5;padding:24px 40px;text-align:center;">
-          <img src="${process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.us"}/logo.jpg" alt="OfficePulse" width="180" height="54" style="display:inline-block;height:54px;width:auto;max-width:220px;" />
+          <img src="${process.env.NEXT_PUBLIC_APP_URL ?? "https://officepulse.us"}/logo.PNG" alt="OfficePulse" width="180" height="54" style="display:inline-block;height:54px;width:auto;max-width:220px;" />
         </td></tr>
         <!-- Body -->
         <tr><td style="padding:40px;">

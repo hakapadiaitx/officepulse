@@ -48,7 +48,7 @@ export default function PricingPage() {
       <nav className="bg-white border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.jpg" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" />
+            <Image src="/logo.PNG" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" />
           </Link>
           <div className="flex gap-4 items-center">
             {session ? (

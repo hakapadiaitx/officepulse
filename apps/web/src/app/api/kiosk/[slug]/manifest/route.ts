@@ -27,8 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     theme_color: themeColor,
     categories: ["business", "productivity"],
     icons: [
-      { src: "/logo.jpg", sizes: "512x512", type: "image/jpeg", purpose: "any" },
-      { src: "/logo.jpg", sizes: "192x192", type: "image/jpeg", purpose: "any" },
+      { src: "/logo.PNG", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/logo.PNG", sizes: "192x192", type: "image/png", purpose: "any" },
     ],
   };
 

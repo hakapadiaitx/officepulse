@@ -959,7 +959,7 @@ export default function KioskPage() {
       <div className="flex items-center gap-4">
         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm p-1">
           <Image
-              src={logoUrl || "/logo.jpg"}
+              src={logoUrl || "/logo.PNG"}
               alt="Logo"
               width={56} height={56}
               className="w-full h-full object-contain"
