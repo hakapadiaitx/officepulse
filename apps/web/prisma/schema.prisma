@@ -82,6 +82,7 @@ model Tenant {
   leaveRequests        LeaveRequest[]
   leavePolicies        LeavePolicy[]
   leaveAllowances      LeaveAllowance[]
+  schedules            Schedule[]
 }
 
 model User {
@@ -121,6 +122,7 @@ model Employee {
   attendanceLogs  AttendanceLog[]
   leaveRequests   LeaveRequest[]
   leaveAllowances LeaveAllowance[]
+  schedules       Schedule[]
 
   @@index([tenantId])
 }
@@ -194,4 +196,22 @@ model LeaveRequest {
   @@index([tenantId])
   @@index([employeeId])
   @@index([tenantId, startDate, endDate])
+}
+
+model Schedule {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       String   // YYYY-MM-DD
+  startTime  String   // HH:mm  (24-hour)
+  endTime    String   // HH:mm
+  label      String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, date])
+  @@index([tenantId, employeeId])
 }
