@@ -3,7 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { CheckCircle, Clock } from "lucide-react";
+import { CheckCircle } from "lucide-react";
+import Image from "next/image";
 import { PLANS } from "@/lib/stripe";
 
 const yearlyDiscount = Math.round((1 - PLANS[0].priceYearly / (PLANS[0].priceMonthly * 12)) * 100);
@@ -47,10 +48,7 @@ export default function PricingPage() {
       <nav className="bg-white border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-bold text-xl">OfficePulse</span>
+            <Image src="/logo.jpg" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" />
           </Link>
           <div className="flex gap-4 items-center">
             {session ? (
