@@ -38,7 +38,7 @@ export function Sidebar() {
         <span className="font-bold text-sm text-white truncate">{user?.tenantName || "OfficePulse"}</span>
       </div>
 
-      <nav className="flex-1 py-4 px-3 space-y-1">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {nav.map((item) => {
           const active = pathname.startsWith(item.href);
           return (
