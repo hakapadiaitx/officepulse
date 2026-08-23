@@ -1,8 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   CheckCircle, Users, BarChart3, Clock, Shield, Smartphone,
   CalendarDays, QrCode, Bell, FileSpreadsheet, Mail, ChevronRight,
-  CheckCheck, X, Coffee, Home, LogOut,
+  CheckCheck, Coffee, Home, LogOut,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -12,12 +13,9 @@ export default function LandingPage() {
       {/* ── Nav ────────────────────────────────────────────────────────────── */}
       <nav className="border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-10">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
-              <Clock className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-lg text-gray-900">OfficePulse</span>
-          </div>
+          <Link href="/">
+            <Image src="/logo.jpg" alt="OfficePulse" width={160} height={48} className="h-10 w-auto" priority />
+          </Link>
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-gray-900 transition-colors">How it works</a>
@@ -375,12 +373,7 @@ export default function LandingPage() {
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-100 py-10">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <Clock className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-gray-900 text-sm">OfficePulse</span>
-          </div>
+          <Image src="/logo.jpg" alt="OfficePulse" width={120} height={36} className="h-8 w-auto" />
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/pricing" className="hover:text-gray-600 transition-colors">Pricing</Link>
             <Link href="/login" className="hover:text-gray-600 transition-colors">Sign in</Link>

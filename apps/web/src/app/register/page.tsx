@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Clock, Eye, EyeOff, Upload, X, Check } from "lucide-react";
+import { Eye, EyeOff, Upload, X, Check } from "lucide-react";
 import { BRAND_COLORS } from "@/lib/brand";
 
 function RegisterForm() {
@@ -96,11 +96,8 @@ function RegisterForm() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: brandColor }}>
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-bold text-2xl text-gray-900">OfficePulse</span>
+          <Link href="/" className="inline-block mb-4">
+            <Image src="/logo.jpg" alt="OfficePulse" width={200} height={60} className="h-14 w-auto mx-auto" priority />
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Create your workspace</h1>
           <p className="text-gray-500 text-sm mt-1">14-day free trial, no credit card needed</p>

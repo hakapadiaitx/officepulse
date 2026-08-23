@@ -27,9 +27,12 @@ export function Sidebar() {
     <aside className="w-60 bg-white border-r border-gray-100 flex flex-col">
       <div className="px-4 py-4 flex items-center gap-3" style={{ backgroundColor: brandColor }}>
         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 p-0.5 shadow-sm">
-          {logoUrl
-            ? <Image src={logoUrl} alt="Logo" width={40} height={40} className="w-full h-full object-contain" />
-            : <Clock className="w-5 h-5 flex-shrink-0" style={{ color: brandColor }} />}
+          <Image
+            src={logoUrl || "/logo.jpg"}
+            alt="Logo"
+            width={40} height={40}
+            className="w-full h-full object-contain"
+          />
         </div>
         <span className="font-bold text-sm text-white truncate">{user?.tenantName || "OfficePulse"}</span>
       </div>

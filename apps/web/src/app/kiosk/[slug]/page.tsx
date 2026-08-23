@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
-import { Clock, Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays } from "lucide-react";
+import { Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays } from "lucide-react";
 import Image from "next/image";
 
 type Status = "not_arrived" | "in" | "out" | "left" | "on_leave";
@@ -957,9 +957,12 @@ export default function KioskPage() {
     <div className="text-white px-6 py-4 flex items-center justify-between flex-shrink-0" style={{ backgroundColor: brandColor }}>
       <div className="flex items-center gap-4">
         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm p-1">
-          {logoUrl
-            ? <Image src={logoUrl} alt="Logo" width={56} height={56} className="w-full h-full object-contain" />
-            : <Clock className="w-7 h-7" style={{ color: brandColor }} />}
+          <Image
+              src={logoUrl || "/logo.jpg"}
+              alt="Logo"
+              width={56} height={56}
+              className="w-full h-full object-contain"
+            />
         </div>
         <div>
           <p className="font-bold text-xl">{tenantName || "OfficePulse"}</p>
