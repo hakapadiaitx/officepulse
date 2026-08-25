@@ -799,11 +799,13 @@ export default function KioskPage() {
   const [upcomingLoading, setUpcomingLoading] = useState(false);
   const [upcomingLoaded, setUpcomingLoaded]   = useState(false);
 
-  // Schedule
-  interface ScheduleEntry { name: string; startTime: string; endTime: string; label: string | null }
-  const [scheduleByDate, setScheduleByDate] = useState<Record<string, ScheduleEntry[]>>({});
+  // Schedule — PIN-gated personal view
+  interface MyScheduleEntry { startTime: string; endTime: string; label: string | null; notes: string | null }
+  const [schedulePin, setSchedulePin]         = useState("");
+  const [scheduleEmployee, setScheduleEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [scheduleByDate, setScheduleByDate]   = useState<Record<string, MyScheduleEntry[]>>({});
   const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [scheduleLoaded, setScheduleLoaded]   = useState(false);
+  const [scheduleError, setScheduleError]     = useState("");
   const [scheduleStart, setScheduleStart]     = useState(() => format(new Date(), "yyyy-MM-dd"));
 
   const todayDate = format(new Date(), "yyyy-MM-dd");
@@ -845,15 +847,19 @@ export default function KioskPage() {
     }
   }, [slug]);
 
-  const fetchSchedule = useCallback(async (date: string) => {
+  const fetchMySchedule = useCallback(async (pin: string, start: string) => {
     setScheduleLoading(true);
+    setScheduleError("");
     try {
-      const res = await fetch(`/api/kiosk/${slug}/schedule?date=${date}`);
-      if (res.ok) {
-        const d = await res.json();
-        setScheduleByDate(d.byDate ?? {});
-        setScheduleLoaded(true);
-      }
+      const res = await fetch(`/api/kiosk/${slug}/my-schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin, start }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setScheduleError(d.error ?? "Invalid PIN"); return; }
+      setScheduleEmployee(d.employee);
+      setScheduleByDate(d.byDate ?? {});
     } finally {
       setScheduleLoading(false);
     }
@@ -1085,7 +1091,7 @@ export default function KioskPage() {
               onClick={() => {
                 setKioskView(key);
                 if (key === "upcoming" && !upcomingLoaded) fetchUpcomingLeaves();
-                if (key === "schedule" && !scheduleLoaded) fetchSchedule(scheduleStart);
+                if (key !== "schedule") { setSchedulePin(""); setScheduleEmployee(null); setScheduleError(""); }
               }}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                 kioskView === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"
@@ -1160,107 +1166,180 @@ export default function KioskPage() {
           )}
         </div>
       ) : kioskView === "schedule" ? (
-        /* ── Schedule view ── */
-        <div className="max-w-5xl mx-auto w-full p-6">
-          {/* Week navigation */}
-          <div className="flex items-center justify-between mb-5">
-            <button
-              onClick={() => {
-                const prev = format(new Date(new Date(scheduleStart + "T12:00:00Z").getTime() - 7 * 86400000), "yyyy-MM-dd");
-                setScheduleStart(prev);
-                fetchSchedule(prev);
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" /> Prev week
-            </button>
-            <button
-              onClick={() => {
-                const today = format(new Date(), "yyyy-MM-dd");
-                setScheduleStart(today);
-                fetchSchedule(today);
-              }}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Today
-            </button>
-            <button
-              onClick={() => {
-                const next = format(new Date(new Date(scheduleStart + "T12:00:00Z").getTime() + 7 * 86400000), "yyyy-MM-dd");
-                setScheduleStart(next);
-                fetchSchedule(next);
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              Next week <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+        /* ── Schedule view — PIN-gated per employee ── */
+        <div className="max-w-md mx-auto w-full p-6">
+          {!scheduleEmployee ? (
+            /* PIN entry */
+            <div className="card p-8 flex flex-col items-center gap-6">
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mx-auto mb-3" style={{ backgroundColor: brandColor }}>
+                  <ClipboardList className="w-7 h-7" />
+                </div>
+                <p className="text-lg font-semibold text-gray-800">View My Schedule</p>
+                <p className="text-sm text-gray-400 mt-1">Enter your 4-digit PIN</p>
+              </div>
 
-          {scheduleLoading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${brandColor}40`, borderTopColor: brandColor }} />
+              <div className="flex gap-4">
+                {[0,1,2,3].map((i) => (
+                  <div key={i} className="w-5 h-5 rounded-full border-2 transition-all"
+                    style={{ backgroundColor: schedulePin.length > i ? brandColor : "transparent", borderColor: schedulePin.length > i ? brandColor : "#d1d5db" }} />
+                ))}
+              </div>
+
+              {scheduleError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 w-full text-center">{scheduleError}</p>
+              )}
+
+              {scheduleLoading ? (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${brandColor}40`, borderTopColor: brandColor }} />
+                  <p className="text-sm text-gray-400">Verifying…</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 w-full max-w-[240px]">
+                  {(["1","2","3","4","5","6","7","8","9","⌫","0","✓"] as const).map((key) => (
+                    <button key={key}
+                      disabled={scheduleLoading}
+                      onClick={() => {
+                        if (key === "⌫") {
+                          setSchedulePin((p) => p.slice(0, -1));
+                          setScheduleError("");
+                        } else if (key === "✓") {
+                          if (schedulePin.length === 4) fetchMySchedule(schedulePin, scheduleStart);
+                        } else if (schedulePin.length < 4) {
+                          const next = schedulePin + key;
+                          setSchedulePin(next);
+                          setScheduleError("");
+                          if (next.length === 4) fetchMySchedule(next, scheduleStart);
+                        }
+                      }}
+                      className={`aspect-square rounded-2xl text-lg font-semibold flex items-center justify-center transition-colors ${
+                        key === "✓"
+                          ? "text-white"
+                          : "bg-gray-50 text-gray-900 hover:bg-gray-100"
+                      }`}
+                      style={key === "✓" ? { backgroundColor: brandColor } : undefined}>
+                      {key === "⌫" ? <Delete className="w-4 h-4 mx-auto" /> : key}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (() => {
-            // Build the 7 days to display
-            const days = Array.from({ length: 7 }, (_, i) => {
-              const d = new Date(new Date(scheduleStart + "T12:00:00Z").getTime() + i * 86400000);
-              return format(d, "yyyy-MM-dd");
-            });
-            const todayStr = format(new Date(), "yyyy-MM-dd");
-            const hasAny = days.some((d) => (scheduleByDate[d]?.length ?? 0) > 0);
-            if (!hasAny) return (
-              <div className="text-center py-20 text-gray-400">
-                <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p className="font-medium">No shifts scheduled this week</p>
+          ) : (
+            /* Schedule results */
+            <div className="space-y-4">
+              {/* Employee header + controls */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: brandColor }}>
+                    {scheduleEmployee.name.split(" ").map((n) => n[0]).join("").slice(0,2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{scheduleEmployee.name}</p>
+                    <p className="text-xs text-gray-400">My schedule</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setScheduleEmployee(null); setSchedulePin(""); setScheduleByDate({}); setScheduleError(""); }}
+                  className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  Switch
+                </button>
               </div>
-            );
-            return (
-              <div className="space-y-3">
-                {days.map((dateStr) => {
-                  const entries = scheduleByDate[dateStr] ?? [];
-                  if (entries.length === 0) return null;
-                  const d = new Date(dateStr + "T12:00:00Z");
-                  const isToday = dateStr === todayStr;
-                  return (
-                    <div key={dateStr} className={`card p-4 ${isToday ? "ring-2 ring-offset-1" : ""}`} style={isToday ? { outlineColor: brandColor } : {}}>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                          style={{ backgroundColor: brandColor }}>
-                          {d.getUTCDate()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })}
-                            {isToday && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: brandColor }}>Today</span>}
-                          </p>
-                          <p className="text-xs text-gray-400">{entries.length} shift{entries.length > 1 ? "s" : ""}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        {entries.map((e, i) => (
-                          <div key={i} className="flex items-center justify-between gap-3 bg-gray-50 rounded-lg px-3 py-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                                style={{ backgroundColor: brandColor }}>
-                                {e.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
-                                {e.label && <p className="text-xs text-gray-400 truncate">{e.label}</p>}
-                              </div>
+
+              {/* Week navigation */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    const prev = format(new Date(new Date(scheduleStart + "T12:00:00Z").getTime() - 7 * 86400000), "yyyy-MM-dd");
+                    setScheduleStart(prev);
+                    fetchMySchedule(schedulePin, prev);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Prev
+                </button>
+                <button
+                  onClick={() => {
+                    const today = format(new Date(), "yyyy-MM-dd");
+                    setScheduleStart(today);
+                    fetchMySchedule(schedulePin, today);
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  This week
+                </button>
+                <button
+                  onClick={() => {
+                    const next = format(new Date(new Date(scheduleStart + "T12:00:00Z").getTime() + 7 * 86400000), "yyyy-MM-dd");
+                    setScheduleStart(next);
+                    fetchMySchedule(schedulePin, next);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {scheduleLoading ? (
+                <div className="flex justify-center py-16">
+                  <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${brandColor}40`, borderTopColor: brandColor }} />
+                </div>
+              ) : (() => {
+                const days = Array.from({ length: 7 }, (_, i) =>
+                  format(new Date(new Date(scheduleStart + "T12:00:00Z").getTime() + i * 86400000), "yyyy-MM-dd")
+                );
+                const todayStr = format(new Date(), "yyyy-MM-dd");
+                const hasAny = days.some((d) => (scheduleByDate[d]?.length ?? 0) > 0);
+                if (!hasAny) return (
+                  <div className="text-center py-16 text-gray-400">
+                    <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p className="font-medium text-sm">No shifts scheduled this week</p>
+                  </div>
+                );
+                return (
+                  <div className="space-y-3">
+                    {days.map((dateStr) => {
+                      const entries = scheduleByDate[dateStr] ?? [];
+                      if (entries.length === 0) return null;
+                      const d = new Date(dateStr + "T12:00:00Z");
+                      const isToday = dateStr === todayStr;
+                      return (
+                        <div key={dateStr} className="card p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                              style={{ backgroundColor: brandColor }}>
+                              {d.getUTCDate()}
                             </div>
-                            <span className="text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg px-2 py-1 flex-shrink-0 tabular-nums">
-                              {e.startTime} – {e.endTime}
-                            </span>
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}
+                                {isToday && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: brandColor }}>Today</span>}
+                              </p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+                          <div className="space-y-2">
+                            {entries.map((e, i) => (
+                              <div key={i} className="flex items-center justify-between gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                                <div className="min-w-0">
+                                  {e.label && <p className="text-sm font-medium text-gray-800 truncate">{e.label}</p>}
+                                  {e.notes && <p className="text-xs text-gray-400 truncate">{e.notes}</p>}
+                                  {!e.label && !e.notes && <p className="text-sm text-gray-500">Shift</p>}
+                                </div>
+                                <span className="text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg px-2 py-1 flex-shrink-0 tabular-nums">
+                                  {e.startTime} – {e.endTime}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       ) : (
       <>
