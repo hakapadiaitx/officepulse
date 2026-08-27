@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell, UserCog, Trash2, Plus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { BRAND_COLORS } from "@/lib/brand";
@@ -60,6 +60,17 @@ export default function SettingsPage() {
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // HR users
+  interface HrUser { id: string; firstName: string; lastName: string; email: string }
+  const [hrUsers, setHrUsers] = useState<HrUser[]>([]);
+  const [hrLoaded, setHrLoaded] = useState(false);
+  const [hrLoading, setHrLoading] = useState(false);
+  const [hrForm, setHrForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
+  const [hrFormOpen, setHrFormOpen] = useState(false);
+  const [hrSaving, setHrSaving] = useState(false);
+  const [hrMsg, setHrMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [hrShowPw, setHrShowPw] = useState(false);
 
   // Late arrival alert
   const [lateAlertEnabled, setLateAlertEnabled] = useState(false);
@@ -283,6 +294,44 @@ export default function SettingsPage() {
       setBrandMsg("Branding saved! Refresh to see the colour applied across the app.");
     } else {
       setBrandMsg("Failed to save colour. Please try again.");
+    }
+  }
+
+  async function loadHrUsers() {
+    setHrLoading(true);
+    try {
+      const res = await fetch("/api/settings/hr-users");
+      if (res.ok) { setHrUsers(await res.json()); setHrLoaded(true); }
+    } finally { setHrLoading(false); }
+  }
+
+  async function createHrUser() {
+    setHrSaving(true);
+    setHrMsg(null);
+    try {
+      const res = await fetch("/api/settings/hr-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(hrForm),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setHrUsers((prev) => [...prev, data]);
+        setHrForm({ firstName: "", lastName: "", email: "", password: "" });
+        setHrFormOpen(false);
+        setHrMsg({ type: "success", text: `HR access granted to ${data.firstName} ${data.lastName}.` });
+      } else {
+        setHrMsg({ type: "error", text: data.error ?? "Failed to create HR user." });
+      }
+    } finally { setHrSaving(false); }
+  }
+
+  async function revokeHrUser(id: string, name: string) {
+    if (!confirm(`Revoke HR access for ${name}? They will no longer be able to log in.`)) return;
+    const res = await fetch(`/api/settings/hr-users/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setHrUsers((prev) => prev.filter((u) => u.id !== id));
+      setHrMsg({ type: "success", text: `HR access revoked for ${name}.` });
     }
   }
 
@@ -841,6 +890,110 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* HR Access — only visible to owner/admin */}
+      {(user?.role === "OWNER" || user?.role === "ADMIN") && (
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                <UserCog className="w-4 h-4 text-gray-500" /> HR Access
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                HR managers can approve or reject leave requests and view leave balances for all employees.
+              </p>
+            </div>
+            <button
+              onClick={() => { if (!hrLoaded) loadHrUsers(); setHrFormOpen((v) => !v); setHrMsg(null); }}
+              className="flex items-center gap-1.5 btn-primary text-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add HR user
+            </button>
+          </div>
+
+          {hrMsg && (
+            <p className={`text-sm px-3 py-2 rounded-lg border ${hrMsg.type === "error" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+              {hrMsg.text}
+            </p>
+          )}
+
+          {/* Add HR user form */}
+          {hrFormOpen && (
+            <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
+              <p className="text-sm font-medium text-gray-700">New HR manager login</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">First name</label>
+                  <input className="input" value={hrForm.firstName} onChange={(e) => setHrForm((f) => ({ ...f, firstName: e.target.value }))} placeholder="Jane" />
+                </div>
+                <div>
+                  <label className="label">Last name</label>
+                  <input className="input" value={hrForm.lastName} onChange={(e) => setHrForm((f) => ({ ...f, lastName: e.target.value }))} placeholder="Smith" />
+                </div>
+              </div>
+              <div>
+                <label className="label">Email</label>
+                <input className="input" type="email" value={hrForm.email} onChange={(e) => setHrForm((f) => ({ ...f, email: e.target.value }))} placeholder="hr@company.com" />
+              </div>
+              <div>
+                <label className="label">Password</label>
+                <div className="relative">
+                  <input
+                    className="input pr-10"
+                    type={hrShowPw ? "text" : "password"}
+                    value={hrForm.password}
+                    onChange={(e) => setHrForm((f) => ({ ...f, password: e.target.value }))}
+                    placeholder="Min 8 characters"
+                  />
+                  <button type="button" onClick={() => setHrShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {hrShowPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={createHrUser} disabled={hrSaving || !hrForm.firstName || !hrForm.email || hrForm.password.length < 8} className="btn-primary text-sm flex items-center gap-1.5">
+                  {hrSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {hrSaving ? "Creating…" : "Create HR login"}
+                </button>
+                <button onClick={() => { setHrFormOpen(false); setHrMsg(null); }} className="btn-secondary text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* HR user list */}
+          {!hrLoaded ? (
+            <button onClick={loadHrUsers} disabled={hrLoading} className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1.5">
+              {hrLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {hrLoading ? "Loading…" : "Show existing HR users"}
+            </button>
+          ) : hrUsers.length === 0 ? (
+            <p className="text-sm text-gray-400">No HR users yet. Add one above.</p>
+          ) : (
+            <div className="space-y-2">
+              {hrUsers.map((u) => (
+                <div key={u.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{u.firstName} {u.lastName}</p>
+                    <p className="text-xs text-gray-400">{u.email}</p>
+                  </div>
+                  <button
+                    onClick={() => revokeHrUser(u.id, `${u.firstName} ${u.lastName}`)}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Revoke
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-xs text-gray-400">
+              HR managers log in at the same sign-in page using their email, password, and your workspace slug: <span className="font-mono text-gray-600">{user?.tenantSlug}</span>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

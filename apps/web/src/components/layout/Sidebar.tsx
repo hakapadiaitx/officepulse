@@ -6,7 +6,7 @@ import { LayoutDashboard, Users, Clock, BarChart3, Settings, LogOut, CalendarDay
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
-const nav = [
+const adminNav = [
   { href: "/dashboard",  label: "Dashboard",      icon: LayoutDashboard },
   { href: "/attendance", label: "Attendance",      icon: Clock          },
   { href: "/employees",  label: "Employees",       icon: Users          },
@@ -17,12 +17,19 @@ const nav = [
   { href: "/support",    label: "Support",         icon: LifeBuoy       },
 ];
 
+const hrNav = [
+  { href: "/leaves",  label: "Leave Requests", icon: CalendarDays },
+  { href: "/support", label: "Support",         icon: LifeBuoy     },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as any;
   const brandColor: string = user?.brandColor ?? "#4f46e5";
   const logoUrl: string | null = user?.logoUrl ?? null;
+  const isHR = user?.role === "MANAGER";
+  const nav = isHR ? hrNav : adminNav;
 
   return (
     <aside className="w-60 bg-white border-r border-gray-100 flex flex-col">
@@ -35,7 +42,10 @@ export function Sidebar() {
             className="w-full h-full object-contain"
           />
         </div>
-        <span className="font-bold text-sm text-white truncate">{user?.tenantName || "OfficePulse"}</span>
+        <div className="min-w-0">
+          <span className="font-bold text-sm text-white truncate block">{user?.tenantName || "OfficePulse"}</span>
+          {isHR && <span className="text-xs text-white/70">HR Manager</span>}
+        </div>
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
