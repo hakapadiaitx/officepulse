@@ -58,6 +58,8 @@ export default function SettingsPage() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Late arrival alert
   const [lateAlertEnabled, setLateAlertEnabled] = useState(false);
@@ -281,6 +283,25 @@ export default function SettingsPage() {
       setBrandMsg("Branding saved! Refresh to see the colour applied across the app.");
     } else {
       setBrandMsg("Failed to save colour. Please try again.");
+    }
+  }
+
+  async function syncSubscription() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/subscriptions/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMsg({ type: "success", text: `Synced! Plan: ${data.plan} · ${data.maxEmployees >= 999999 ? "Unlimited" : data.maxEmployees} employees.` });
+        await updateSession();
+      } else {
+        setSyncMsg({ type: "error", text: data.error ?? "Sync failed" });
+      }
+    } catch {
+      setSyncMsg({ type: "error", text: "Network error — please try again." });
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -723,13 +744,27 @@ export default function SettingsPage() {
               </div>
             )}
             {user?.subscriptionStatus === "ACTIVE" && !user?.cancelAtPeriodEnd && (
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
                 <Link href="/pricing" className="btn-secondary text-sm inline-flex items-center gap-1.5">
                   Change plan <ExternalLink className="w-3.5 h-3.5" />
                 </Link>
+                <button
+                  onClick={syncSubscription}
+                  disabled={syncing}
+                  title="Re-sync your plan limits from Stripe if they look incorrect"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {syncing ? "Syncing…" : "Sync"}
+                </button>
               </div>
             )}
           </div>
+        )}
+        {syncMsg && (
+          <p className={`text-sm px-3 py-2 rounded-lg border ${syncMsg.type === "error" ? "bg-red-50 border-red-100 text-red-600" : "bg-green-50 border-green-100 text-green-700"}`}>
+            {syncMsg.text}
+          </p>
         )}
 
         {(user?.subscriptionStatus === "TRIALING" || user?.subscriptionStatus === "CANCELED") && (

@@ -3,6 +3,22 @@ import { getStripe, PLANS } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import type Stripe from "stripe";
 
+function planFromPriceId(priceId: string) {
+  for (const plan of PLANS) {
+    if (plan.stripePriceMonthlyId === priceId) return { plan, interval: "monthly" as const };
+    if (plan.stripePriceYearlyId  === priceId) return { plan, interval: "yearly"  as const };
+  }
+  return null;
+}
+
+const statusMap: Record<string, string> = {
+  active:   "ACTIVE",
+  past_due: "PAST_DUE",
+  canceled: "CANCELED",
+  unpaid:   "UNPAID",
+  trialing: "TRIALING",
+};
+
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret || secret === "whsec_placeholder") {
@@ -25,24 +41,32 @@ export async function POST(req: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantId = session.metadata?.tenantId;
-        const planId = session.metadata?.planId;
-        const interval = session.metadata?.interval === "yearly" ? "yearly" : "monthly";
+        const planIdMeta = session.metadata?.planId;
         if (!tenantId) break;
 
-        const plan = PLANS.find((p) => p.id === planId);
+        // Prefer plan derived from the actual Stripe price ID — metadata planId is
+        // a secondary fallback in case the price lookup fails.
         const subscription = session.subscription
-          ? await getStripe().subscriptions.retrieve(session.subscription as string)
+          ? await getStripe().subscriptions.retrieve(session.subscription as string, {
+              expand: ["items.data.price"],
+            })
           : null;
+
+        const priceId = subscription?.items?.data[0]?.price?.id;
+        const resolved = priceId ? planFromPriceId(priceId) : null;
+        const fallbackPlan = PLANS.find((p) => p.id === planIdMeta);
+        const plan = resolved?.plan ?? fallbackPlan;
+        const interval = resolved?.interval ?? (session.metadata?.interval === "yearly" ? "yearly" : "monthly");
 
         await prisma.tenant.update({
           where: { id: tenantId },
           data: {
-            stripeSubscriptionId: subscription?.id,
+            stripeSubscriptionId: subscription?.id ?? null,
             subscriptionStatus: "ACTIVE",
-            currentPlan: planId ?? null,
-            planId: planId ?? null,
+            currentPlan: plan?.id ?? planIdMeta ?? null,
+            planId:      plan?.id ?? planIdMeta ?? null,
             billingInterval: interval,
-            maxEmployees: plan?.maxEmployees ?? 10,
+            maxEmployees: plan?.maxEmployees ?? 5,
             currentPeriodEnd: subscription?.current_period_end
               ? new Date(subscription.current_period_end * 1000)
               : null,
@@ -56,24 +80,23 @@ export async function POST(req: NextRequest) {
         const tenantId = sub.metadata?.tenantId;
         if (!tenantId) break;
 
-        const statusMap: Record<string, string> = {
-          active: "ACTIVE",
-          past_due: "PAST_DUE",
-          canceled: "CANCELED",
-          unpaid: "UNPAID",
-          trialing: "TRIALING",
-        };
-
+        const priceId = sub.items?.data[0]?.price?.id;
+        const resolved = priceId ? planFromPriceId(priceId) : null;
         const priceInterval = sub.items?.data[0]?.price?.recurring?.interval;
-        const billingInterval = priceInterval === "year" ? "yearly" : "monthly";
+        const billingInterval = resolved?.interval ?? (priceInterval === "year" ? "yearly" : "monthly");
 
         await prisma.tenant.update({
           where: { id: tenantId },
           data: {
-            subscriptionStatus: (statusMap[sub.status] || "ACTIVE") as any,
+            subscriptionStatus: (statusMap[sub.status] ?? "ACTIVE") as any,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
             billingInterval,
+            ...(resolved && {
+              currentPlan:  resolved.plan.id,
+              planId:       resolved.plan.id,
+              maxEmployees: resolved.plan.maxEmployees,
+            }),
           },
         });
         break;
@@ -93,6 +116,7 @@ export async function POST(req: NextRequest) {
             planId: null,
             billingInterval: "monthly",
             stripeSubscriptionId: null,
+            maxEmployees: 5,
           },
         });
         break;
