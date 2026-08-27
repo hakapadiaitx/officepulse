@@ -1,15 +1,23 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+
+const SLUG_KEY = "op_last_company_id";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", password: "", tenantSlug: "" });
+
+  // Pre-fill company ID from last successful login
+  useEffect(() => {
+    const saved = localStorage.getItem(SLUG_KEY);
+    if (saved) setForm((f) => ({ ...f, tenantSlug: saved }));
+  }, []);
 
   function update(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -31,6 +39,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.ok) {
+      localStorage.setItem(SLUG_KEY, form.tenantSlug.trim());
       router.push("/dashboard");
     } else {
       setError("Invalid email, password, or company ID. Please check and try again.");
