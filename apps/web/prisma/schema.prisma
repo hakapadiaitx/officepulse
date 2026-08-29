@@ -141,8 +141,10 @@ model AttendanceLog {
   notes        String?
   checkInLat   Float?
   checkInLng   Float?
+  checkInPlace String?
   checkOutLat  Float?
   checkOutLng  Float?
+  checkOutPlace String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

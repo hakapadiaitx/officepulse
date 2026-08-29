@@ -27,8 +27,10 @@ interface AttendanceLog {
   notes: string | null;
   checkInLat: number | null;
   checkInLng: number | null;
+  checkInPlace: string | null;
   checkOutLat: number | null;
   checkOutLng: number | null;
+  checkOutPlace: string | null;
 }
 
 const statusConfig: Record<Status, { label: string; dot: string; badge: string; text: string }> = {
@@ -282,18 +284,19 @@ function EditAttendanceModal({ employee, todayDate, onClose }: EditAttendanceMod
                 </div>
               </div>
 
-              {/* Location links */}
+              {/* Location */}
               {(s.checkInLat != null || s.checkOutLat != null) && (
-                <div className="flex flex-wrap gap-3">
+                <div className="space-y-1.5">
                   {s.checkInLat != null && s.checkInLng != null && (
                     <a
                       href={`https://maps.google.com/?q=${s.checkInLat},${s.checkInLng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors w-fit"
                     >
-                      <MapPin className="w-3 h-3" />
-                      Check-in location
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="font-medium">Check-in:</span>
+                      <span>{s.checkInPlace ?? "View on map"}</span>
                     </a>
                   )}
                   {s.checkOutLat != null && s.checkOutLng != null && (
@@ -301,10 +304,11 @@ function EditAttendanceModal({ employee, todayDate, onClose }: EditAttendanceMod
                       href={`https://maps.google.com/?q=${s.checkOutLat},${s.checkOutLng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors w-fit"
                     >
-                      <MapPin className="w-3 h-3" />
-                      Check-out location
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="font-medium">Check-out:</span>
+                      <span>{s.checkOutPlace ?? "View on map"}</span>
                     </a>
                   )}
                 </div>

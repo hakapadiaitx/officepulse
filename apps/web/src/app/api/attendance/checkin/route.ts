@@ -11,6 +11,7 @@ const schema = z.object({
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
+  place: z.string().max(500).optional(),
 });
 
 // Check IN — employee arrives or returns to office.
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
         checkOutTime: null,
         checkInLat: data.lat ?? null,
         checkInLng: data.lng ?? null,
+        checkInPlace: data.place ?? null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     });

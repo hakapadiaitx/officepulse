@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { X, LogIn, MapPin, CheckCircle, AlertTriangle } from "lucide-react";
 import { PinInput } from "./PinInput";
+import { reverseGeocode } from "@/lib/geocode";
 
 interface Employee { id: string; firstName: string; lastName: string; }
 
@@ -23,6 +24,7 @@ export function CheckInForm({ employee, isArrival = false, onClose }: Props) {
   const [geoRequired, setGeoRequired] = useState(false);
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [place, setPlace] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings/geolocation")
@@ -35,7 +37,13 @@ export function CheckInForm({ employee, isArrival = false, onClose }: Props) {
     if (!navigator.geolocation) { setGeoState("unavailable"); return; }
     setGeoState("requesting");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoState("granted"); },
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setCoords({ lat, lng });
+        setGeoState("granted");
+        const name = await reverseGeocode(lat, lng);
+        setPlace(name);
+      },
       () => setGeoState("denied"),
       { timeout: 10000 }
     );
@@ -84,7 +92,7 @@ export function CheckInForm({ employee, isArrival = false, onClose }: Props) {
         pin,
         checkInTime: new Date(dateTime).toISOString(),
         localDate: format(new Date(), "yyyy-MM-dd"),
-        ...(lat != null && lng != null ? { lat, lng } : {}),
+        ...(lat != null && lng != null ? { lat, lng, place: place ?? undefined } : {}),
       }),
     });
 
@@ -137,7 +145,7 @@ export function CheckInForm({ employee, isArrival = false, onClose }: Props) {
                 <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
               )}
               <div className="flex-1">
-                {geoState === "granted" && <span>Location captured ✓</span>}
+                {geoState === "granted" && <span>Location captured{place ? `: ${place}` : " ✓"}</span>}
                 {geoState === "requesting" && <span>Getting your location…</span>}
                 {geoState === "denied" && (
                   <>

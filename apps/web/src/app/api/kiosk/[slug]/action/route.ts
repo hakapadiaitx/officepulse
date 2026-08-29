@@ -13,6 +13,7 @@ const schema = z.object({
   notes:     z.string().max(1000).optional(),
   lat:       z.number().min(-90).max(90).optional(),
   lng:       z.number().min(-180).max(180).optional(),
+  place:     z.string().max(500).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -60,8 +61,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           tenantId:    tenant.id,
           employeeId:  employee.id,
           checkInTime: ts,
-          checkInLat:  data.lat ?? null,
-          checkInLng:  data.lng ?? null,
+          checkInLat:   data.lat ?? null,
+          checkInLng:   data.lng ?? null,
+          checkInPlace: data.place ?? null,
         },
       });
       return NextResponse.json({ log, status: "in" });
@@ -84,8 +86,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           isEndOfDay:   data.action === "leave",
           purpose:      data.purpose ?? null,
           notes:        data.notes ?? null,
-          checkOutLat:  data.lat ?? null,
-          checkOutLng:  data.lng ?? null,
+          checkOutLat:   data.lat ?? null,
+          checkOutLng:   data.lng ?? null,
+          checkOutPlace: data.place ?? null,
         },
       });
       return NextResponse.json({ log, status: data.action === "leave" ? "left" : "out" });

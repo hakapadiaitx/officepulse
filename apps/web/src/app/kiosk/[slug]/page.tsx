@@ -813,12 +813,20 @@ export default function KioskPage() {
   type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoPlace, setGeoPlace] = useState<string | null>(null);
 
   function requestKioskLocation() {
     if (!navigator.geolocation) { setGeoState("unavailable"); return; }
     setGeoState("requesting");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setGeoCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoState("granted"); },
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setGeoCoords({ lat, lng });
+        setGeoState("granted");
+        const { reverseGeocode } = await import("@/lib/geocode");
+        const name = await reverseGeocode(lat, lng);
+        setGeoPlace(name);
+      },
       () => setGeoState("denied"),
       { timeout: 10000 }
     );
@@ -986,6 +994,9 @@ export default function KioskPage() {
           lng = pos.coords.longitude;
           setGeoCoords({ lat, lng });
           setGeoState("granted");
+          const { reverseGeocode } = await import("@/lib/geocode");
+          const name = await reverseGeocode(lat, lng);
+          setGeoPlace(name);
         } catch {
           setSubmitting(false);
           setGeoState("denied");
@@ -1005,7 +1016,7 @@ export default function KioskPage() {
         timestamp: new Date().toISOString(),
         localDate: format(new Date(), "yyyy-MM-dd"),
         purpose: purpose || undefined,
-        ...(lat != null && lng != null ? { lat, lng } : {}),
+        ...(lat != null && lng != null ? { lat, lng, place: geoPlace ?? undefined } : {}),
       }),
     });
     const data = await res.json();
@@ -1145,7 +1156,7 @@ export default function KioskPage() {
           "bg-amber-50 text-amber-700 border-b border-amber-100"
         }`}>
           <MapPin className="w-4 h-4 flex-shrink-0" />
-          {geoState === "granted" && <span>Location access granted — coordinates will be recorded on each check-in and check-out.</span>}
+          {geoState === "granted" && <span>Location ready{geoPlace ? `: ${geoPlace}` : " ✓"} — will be recorded on each check-in and check-out.</span>}
           {geoState === "requesting" && <span>Requesting location access…</span>}
           {geoState === "denied" && (
             <span>
@@ -1572,7 +1583,7 @@ export default function KioskPage() {
                       "bg-amber-50 text-amber-700"
                     }`}>
                       <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                      {geoState === "granted" && "Location ready ✓"}
+                      {geoState === "granted" && (geoPlace ? `Location: ${geoPlace} ✓` : "Location ready ✓")}
                       {geoState === "requesting" && "Getting location…"}
                       {geoState === "denied" && <span>Location denied — <button type="button" onClick={requestKioskLocation} className="underline">retry</button></span>}
                       {geoState === "unavailable" && "Location unavailable on this device"}

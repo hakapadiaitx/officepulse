@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths } from "date-fns";
-import { ChevronLeft, ChevronRight, Download, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, CalendarDays, MapPin } from "lucide-react";
 import { formatHours } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -35,6 +35,7 @@ interface EmployeeStat {
   daysPresent: number;
   leaveDays: number;
   leaveByType: Record<string, number>;
+  locations: string[];
   dailyStats: EmpDailyStat[];
 }
 interface DailyStat { date: string; employees: number; inMinutes: number; outMinutes: number; }
@@ -291,6 +292,12 @@ export default function ReportsPage() {
                         </span>
                       )}
                     </div>
+                    {emp.locations && emp.locations.length > 0 && (
+                      <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                        <MapPin className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                        <span>{emp.locations.join(" · ")}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
   const byEmployee: Record<string, EmpStats> = {};
   const byDay: Record<string, { date: string; employees: Set<string>; inMinutes: number; outMinutes: number }> = {};
   const byEmployeeDay: Record<string, Record<string, { inMinutes: number; outMinutes: number }>> = {};
+  const locationsByEmployee: Record<string, Set<string>> = {};
 
   // Group logs by employee, already ordered by checkInTime
   const logsByEmployee: Record<string, typeof allLogs> = {};
@@ -88,7 +89,9 @@ export async function GET(req: NextRequest) {
         days: new Set(),
       };
       byEmployeeDay[log.employeeId] = {};
+      locationsByEmployee[log.employeeId] = new Set();
     }
+    if (log.checkInPlace) locationsByEmployee[log.employeeId].add(log.checkInPlace);
     logsByEmployee[log.employeeId].push(log);
   }
 
@@ -208,6 +211,7 @@ export async function GET(req: NextRequest) {
       daysPresent: s.days.size,
       leaveDays: leaveByEmployee[id]?.leaveDays ?? 0,
       leaveByType: leaveByEmployee[id]?.byType ?? {},
+      locations: Array.from(locationsByEmployee[id] ?? []),
       dailyStats: Object.entries(byEmployeeDay[id] ?? {})
         .map(([date, d]) => ({ date, inMinutes: d.inMinutes, outMinutes: d.outMinutes }))
         .sort((a, b) => a.date.localeCompare(b.date)),

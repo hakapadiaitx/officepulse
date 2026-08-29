@@ -14,6 +14,7 @@ const checkOutSchema = z.object({
   notes: z.string().max(1000).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
+  place: z.string().max(500).optional(),
 }).refine((d) => d.isEndOfDay || (d.purpose && d.purpose.trim().length > 0), {
   message: "Purpose is required when checking out temporarily",
   path: ["purpose"],
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
         notes: data.notes ?? null,
         checkOutLat: data.lat ?? null,
         checkOutLng: data.lng ?? null,
+        checkOutPlace: data.place ?? null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     });
