@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
-import { Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays, ClipboardList } from "lucide-react";
+import { Delete, Sun, LogOut, LogIn, Home, Search, X, Lock, Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Check, CalendarDays, ClipboardList, MapPin } from "lucide-react";
 import Image from "next/image";
 import { BrandColorInjector } from "@/components/layout/BrandColorProvider";
 
@@ -809,6 +809,26 @@ export default function KioskPage() {
   const [scheduleError, setScheduleError]     = useState("");
   const [scheduleStart, setScheduleStart]     = useState(() => format(new Date(), "yyyy-MM-dd"));
 
+  // Geolocation
+  type GeoState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
+  const [geoState, setGeoState] = useState<GeoState>("idle");
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  function requestKioskLocation() {
+    if (!navigator.geolocation) { setGeoState("unavailable"); return; }
+    setGeoState("requesting");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setGeoCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoState("granted"); },
+      () => setGeoState("denied"),
+      { timeout: 10000 }
+    );
+  }
+
+  // Trigger permission request whenever requireGeolocation turns on
+  useEffect(() => {
+    if (tenant.requireGeolocation && geoState === "idle") requestKioskLocation();
+  }, [tenant.requireGeolocation]);
+
   const todayDate = format(new Date(), "yyyy-MM-dd");
 
   // Load branding from status endpoint (public, no PIN needed)
@@ -948,16 +968,30 @@ export default function KioskPage() {
     let lng: number | undefined;
 
     if (tenant.requireGeolocation) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
+      if (geoState === "denied" || geoState === "unavailable") {
         setSubmitting(false);
-        setModalError("Location access is required. Please allow location in your browser and try again.");
+        setModalError("Location access is required. Please allow location in this device's settings and refresh the page.");
         return;
+      }
+      if (geoState === "granted" && geoCoords) {
+        lat = geoCoords.lat;
+        lng = geoCoords.lng;
+      } else {
+        // Re-request in case permission was just granted
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+          setGeoCoords({ lat, lng });
+          setGeoState("granted");
+        } catch {
+          setSubmitting(false);
+          setGeoState("denied");
+          setModalError("Location access is required. Please allow location in this device's settings and refresh the page.");
+          return;
+        }
       }
     }
 
@@ -1102,6 +1136,32 @@ export default function KioskPage() {
           );
         })}
       </div>
+
+      {/* Location banner — shown when geo is required */}
+      {tenant.requireGeolocation && (
+        <div className={`px-6 py-2 flex items-center gap-3 text-sm ${
+          geoState === "granted" ? "bg-green-50 text-green-700 border-b border-green-100" :
+          geoState === "denied" || geoState === "unavailable" ? "bg-red-50 text-red-700 border-b border-red-100" :
+          "bg-amber-50 text-amber-700 border-b border-amber-100"
+        }`}>
+          <MapPin className="w-4 h-4 flex-shrink-0" />
+          {geoState === "granted" && <span>Location access granted — coordinates will be recorded on each check-in and check-out.</span>}
+          {geoState === "requesting" && <span>Requesting location access…</span>}
+          {geoState === "denied" && (
+            <span>
+              Location access is denied. Go to your browser or device settings to allow location, then{" "}
+              <button onClick={requestKioskLocation} className="underline font-semibold">retry</button>.
+            </span>
+          )}
+          {geoState === "unavailable" && <span>Location services are not available on this device. Contact your administrator.</span>}
+          {geoState === "idle" && (
+            <span>
+              Location required for check-in and check-out.{" "}
+              <button onClick={requestKioskLocation} className="underline font-semibold">Enable location</button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* View toggle */}
       <div className="max-w-5xl mx-auto w-full px-6 pt-5">
@@ -1501,6 +1561,22 @@ export default function KioskPage() {
                       <label className="label">Purpose / Reason <span className="text-red-400">*</span></label>
                       <input className="input" placeholder="e.g. Client meeting, Lunch…" value={purpose}
                         onChange={(e) => { setPurpose(e.target.value); setModalError(""); }} />
+                    </div>
+                  )}
+
+                  {/* Location status in modal */}
+                  {tenant.requireGeolocation && (
+                    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
+                      geoState === "granted" ? "bg-green-50 text-green-700" :
+                      geoState === "denied" || geoState === "unavailable" ? "bg-red-50 text-red-600" :
+                      "bg-amber-50 text-amber-700"
+                    }`}>
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      {geoState === "granted" && "Location ready ✓"}
+                      {geoState === "requesting" && "Getting location…"}
+                      {geoState === "denied" && <span>Location denied — <button type="button" onClick={requestKioskLocation} className="underline">retry</button></span>}
+                      {geoState === "unavailable" && "Location unavailable on this device"}
+                      {geoState === "idle" && <span>Location required — <button type="button" onClick={requestKioskLocation} className="underline">enable</button></span>}
                     </div>
                   )}
 

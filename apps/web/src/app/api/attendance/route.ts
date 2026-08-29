@@ -12,6 +12,8 @@ const checkOutSchema = z.object({
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   purpose: z.string().max(500).optional(),
   notes: z.string().max(1000).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 }).refine((d) => d.isEndOfDay || (d.purpose && d.purpose.trim().length > 0), {
   message: "Purpose is required when checking out temporarily",
   path: ["purpose"],
@@ -56,10 +58,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = checkOutSchema.parse(body);
 
-    const employee = await prisma.employee.findFirst({
-      where: { id: data.employeeId, tenantId, isActive: true },
-    });
+    const [employee, tenant] = await Promise.all([
+      prisma.employee.findFirst({ where: { id: data.employeeId, tenantId, isActive: true } }),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { requireGeolocation: true } }),
+    ]);
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+
+    if (tenant?.requireGeolocation && (data.lat == null || data.lng == null)) {
+      return NextResponse.json(
+        { error: "Location is required for check-out. Please allow location access and try again." },
+        { status: 422 }
+      );
+    }
 
     const pinValid = await verifyPin(data.pin, employee.pinHash);
     if (!pinValid) return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
@@ -92,6 +102,8 @@ export async function POST(req: NextRequest) {
         isEndOfDay: data.isEndOfDay,
         purpose: data.purpose ?? null,
         notes: data.notes ?? null,
+        checkOutLat: data.lat ?? null,
+        checkOutLng: data.lng ?? null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     });

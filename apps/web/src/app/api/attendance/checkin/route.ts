@@ -9,6 +9,8 @@ const schema = z.object({
   pin: z.string().length(4).regex(/^\d{4}$/),
   checkInTime: z.string().datetime(),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 });
 
 // Check IN — employee arrives or returns to office.
@@ -23,10 +25,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = schema.parse(body);
 
-    const employee = await prisma.employee.findFirst({
-      where: { id: data.employeeId, tenantId, isActive: true },
-    });
+    const [employee, tenant] = await Promise.all([
+      prisma.employee.findFirst({ where: { id: data.employeeId, tenantId, isActive: true } }),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { requireGeolocation: true } }),
+    ]);
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+
+    if (tenant?.requireGeolocation && (data.lat == null || data.lng == null)) {
+      return NextResponse.json(
+        { error: "Location is required for check-in. Please allow location access and try again." },
+        { status: 422 }
+      );
+    }
 
     const pinValid = await verifyPin(data.pin, employee.pinHash);
     if (!pinValid) return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
@@ -53,6 +63,8 @@ export async function POST(req: NextRequest) {
         employeeId: data.employeeId,
         checkInTime: new Date(data.checkInTime),
         checkOutTime: null,
+        checkInLat: data.lat ?? null,
+        checkInLng: data.lng ?? null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     });
