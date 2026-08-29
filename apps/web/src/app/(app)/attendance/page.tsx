@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { Pencil, Plus, Trash2, X, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Pencil, Plus, Trash2, X, ChevronLeft, ChevronRight, Check, MapPin } from "lucide-react";
 import { CheckOutForm } from "@/components/attendance/CheckOutForm";
 import { CheckInForm } from "@/components/attendance/CheckInForm";
 
@@ -14,6 +14,7 @@ interface Employee {
   status: Status;
   lastAction: string | null;
   purpose: string | null;
+  hasLocation?: boolean;
 }
 
 interface AttendanceLog {
@@ -283,14 +284,15 @@ function EditAttendanceModal({ employee, todayDate, onClose }: EditAttendanceMod
 
               {/* Location links */}
               {(s.checkInLat != null || s.checkOutLat != null) && (
-                <div className="flex flex-wrap gap-3 text-xs">
+                <div className="flex flex-wrap gap-3">
                   {s.checkInLat != null && s.checkInLng != null && (
                     <a
                       href={`https://maps.google.com/?q=${s.checkInLat},${s.checkInLng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-brand-600 hover:text-brand-800 underline"
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
                     >
+                      <MapPin className="w-3 h-3" />
                       Check-in location
                     </a>
                   )}
@@ -299,8 +301,9 @@ function EditAttendanceModal({ employee, todayDate, onClose }: EditAttendanceMod
                       href={`https://maps.google.com/?q=${s.checkOutLat},${s.checkOutLng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-brand-600 hover:text-brand-800 underline"
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
                     >
+                      <MapPin className="w-3 h-3" />
                       Check-out location
                     </a>
                   )}
@@ -515,9 +518,12 @@ export default function AttendancePage() {
                         <p className="text-xs text-gray-400 mt-0.5">{emp.purpose}</p>
                       )}
                       {emp.lastAction && emp.status !== "not_arrived" && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-400 flex items-center gap-1">
                           {emp.status === "in" ? "In since" : "At"}{" "}
                           {format(new Date(emp.lastAction), "h:mm a")}
+                          {emp.hasLocation && (
+                            <MapPin className="w-3 h-3 text-green-500 inline-block" title="Location recorded" />
+                          )}
                         </p>
                       )}
                     </div>
