@@ -15,6 +15,7 @@ interface Employee {
   lastAction: string | null;
   purpose: string | null;
   hasLocation?: boolean;
+  checkInPlace?: string | null;
 }
 
 interface AttendanceLog {
@@ -522,12 +523,15 @@ export default function AttendancePage() {
                         <p className="text-xs text-gray-400 mt-0.5">{emp.purpose}</p>
                       )}
                       {emp.lastAction && emp.status !== "not_arrived" && (
-                        <p className="text-xs text-gray-400 flex items-center gap-1">
+                        <p className="text-xs text-gray-400">
                           {emp.status === "in" ? "In since" : "At"}{" "}
                           {format(new Date(emp.lastAction), "h:mm a")}
-                          {emp.hasLocation && (
-                            <span title="Location recorded"><MapPin className="w-3 h-3 text-green-500 inline-block" /></span>
-                          )}
+                        </p>
+                      )}
+                      {emp.checkInPlace && (emp.status === "in" || emp.status === "out") && (
+                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" />
+                          {emp.checkInPlace}
                         </p>
                       )}
                     </div>
