@@ -528,10 +528,10 @@ export default function AttendancePage() {
                           {format(new Date(emp.lastAction), "h:mm a")}
                         </p>
                       )}
-                      {emp.checkInPlace && (emp.status === "in" || emp.status === "out") && (
+                      {emp.hasLocation && (emp.status === "in" || emp.status === "out") && (
                         <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                           <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" />
-                          {emp.checkInPlace}
+                          {emp.checkInPlace ?? "Location recorded"}
                         </p>
                       )}
                     </div>
