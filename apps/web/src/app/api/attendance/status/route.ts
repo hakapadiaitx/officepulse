@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       purpose = log.purpose;
     }
 
-    return { id: emp.id, firstName: emp.firstName, lastName: emp.lastName, email: emp.email, status, lastAction, purpose, hasLocation: log?.checkInLat != null, checkInPlace: log?.checkInPlace ?? null };
+    return { id: emp.id, firstName: emp.firstName, lastName: emp.lastName, email: emp.email, status, lastAction, purpose, hasLocation: log?.checkInLat != null, checkInPlace: log?.checkInPlace ?? null, checkInLat: log?.checkInLat ?? null, checkInLng: log?.checkInLng ?? null, checkInLogId: log?.id ?? null };
   });
 
   const todayMinutes = completedToday.reduce((sum, log) => {

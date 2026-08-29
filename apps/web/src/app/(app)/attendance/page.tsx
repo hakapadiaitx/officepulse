@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { Pencil, Plus, Trash2, X, ChevronLeft, ChevronRight, Check, MapPin } from "lucide-react";
 import { CheckOutForm } from "@/components/attendance/CheckOutForm";
@@ -16,6 +16,9 @@ interface Employee {
   purpose: string | null;
   hasLocation?: boolean;
   checkInPlace?: string | null;
+  checkInLat?: number | null;
+  checkInLng?: number | null;
+  checkInLogId?: string | null;
 }
 
 interface AttendanceLog {
@@ -460,6 +463,7 @@ export default function AttendancePage() {
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
 
   const todayDate = format(new Date(), "yyyy-MM-dd");
+  const geocodedIds = useRef<Set<string>>(new Set());
 
   async function fetchStatus() {
     const res = await fetch(`/api/attendance/status?localDate=${todayDate}`);
@@ -471,6 +475,29 @@ export default function AttendancePage() {
   }
 
   useEffect(() => { fetchStatus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocode any employees who have lat/lng but no resolved place name yet
+  useEffect(() => {
+    const needsGeocode = employees.filter(
+      (e) => e.checkInLat != null && !e.checkInPlace && e.checkInLogId && !geocodedIds.current.has(e.id)
+    );
+    if (needsGeocode.length === 0) return;
+
+    needsGeocode.forEach((e) => geocodedIds.current.add(e.id));
+
+    import("@/lib/geocode").then(({ reverseGeocode }) => {
+      needsGeocode.forEach(async (emp) => {
+        const place = await reverseGeocode(emp.checkInLat!, emp.checkInLng!);
+        setEmployees((prev) => prev.map((x) => x.id === emp.id ? { ...x, checkInPlace: place } : x));
+        // Save back to DB so next load is instant
+        fetch(`/api/admin/attendance/${emp.checkInLogId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checkInPlace: place }),
+        }).catch(() => {});
+      });
+    });
+  }, [employees]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function closeModal() { setModal(null); fetchStatus(); }
   function closeEdit()  { setEditEmployee(null); fetchStatus(); }

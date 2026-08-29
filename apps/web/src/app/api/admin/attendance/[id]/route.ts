@@ -9,6 +9,7 @@ const updateSchema = z.object({
   isEndOfDay:   z.boolean().optional(),
   purpose:      z.string().max(500).nullable().optional(),
   notes:        z.string().max(1000).nullable().optional(),
+  checkInPlace: z.string().max(500).nullable().optional(),
 });
 
 export async function PATCH(
@@ -35,6 +36,7 @@ export async function PATCH(
       ...(data.isEndOfDay !== undefined   && { isEndOfDay: data.isEndOfDay }),
       ...(data.purpose !== undefined      && { purpose: data.purpose }),
       ...(data.notes !== undefined        && { notes: data.notes }),
+      ...(data.checkInPlace !== undefined && { checkInPlace: data.checkInPlace }),
     },
   });
 
