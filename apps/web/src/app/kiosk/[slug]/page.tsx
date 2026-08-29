@@ -921,7 +921,7 @@ export default function KioskPage() {
       setPin("");
       return;
     }
-    setTenant({ tenantName: data.tenantName, brandColor: data.brandColor, logoUrl: data.logoUrl, requireGeolocation: data.requireGeolocation ?? false });
+    setTenant((prev) => ({ tenantName: data.tenantName, brandColor: data.brandColor, logoUrl: data.logoUrl, requireGeolocation: data.requireGeolocation ?? prev.requireGeolocation }));
     setEmployees(data.employees ?? []);
     setKioskToken(data.kioskToken ?? "");
     setPin("");

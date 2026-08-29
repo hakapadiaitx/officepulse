@@ -85,6 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       tenantName: tenant.name,
       brandColor: tenant.brandColor,
       logoUrl: tenant.logoUrl ?? null,
+      requireGeolocation: tenant.requireGeolocation,
       employees: list,
       kioskToken,
     });
