@@ -522,7 +522,7 @@ export default function AttendancePage() {
                           {emp.status === "in" ? "In since" : "At"}{" "}
                           {format(new Date(emp.lastAction), "h:mm a")}
                           {emp.hasLocation && (
-                            <MapPin className="w-3 h-3 text-green-500 inline-block" title="Location recorded" />
+                            <span title="Location recorded"><MapPin className="w-3 h-3 text-green-500 inline-block" /></span>
                           )}
                         </p>
                       )}
