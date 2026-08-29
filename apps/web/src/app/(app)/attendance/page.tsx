@@ -24,6 +24,10 @@ interface AttendanceLog {
   isEndOfDay: boolean;
   purpose: string | null;
   notes: string | null;
+  checkInLat: number | null;
+  checkInLng: number | null;
+  checkOutLat: number | null;
+  checkOutLng: number | null;
 }
 
 const statusConfig: Record<Status, { label: string; dot: string; badge: string; text: string }> = {
@@ -276,6 +280,32 @@ function EditAttendanceModal({ employee, todayDate, onClose }: EditAttendanceMod
                   />
                 </div>
               </div>
+
+              {/* Location links */}
+              {(s.checkInLat != null || s.checkOutLat != null) && (
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {s.checkInLat != null && s.checkInLng != null && (
+                    <a
+                      href={`https://maps.google.com/?q=${s.checkInLat},${s.checkInLng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-brand-600 hover:text-brand-800 underline"
+                    >
+                      Check-in location
+                    </a>
+                  )}
+                  {s.checkOutLat != null && s.checkOutLng != null && (
+                    <a
+                      href={`https://maps.google.com/?q=${s.checkOutLat},${s.checkOutLng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-brand-600 hover:text-brand-800 underline"
+                    >
+                      Check-out location
+                    </a>
+                  )}
+                </div>
+              )}
 
               {s.checkOutTime && (
                 <div className="flex items-center gap-4">

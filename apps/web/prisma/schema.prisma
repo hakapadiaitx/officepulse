@@ -73,6 +73,7 @@ model Tenant {
   maxEmployees         Int                @default(5)
   logoUrl              String?
   brandColor           String             @default("#4f46e5")
+  requireGeolocation   Boolean            @default(false)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -138,6 +139,10 @@ model AttendanceLog {
   isEndOfDay   Boolean   @default(false)
   purpose      String?
   notes        String?
+  checkInLat   Float?
+  checkInLng   Float?
+  checkOutLat  Float?
+  checkOutLng  Float?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

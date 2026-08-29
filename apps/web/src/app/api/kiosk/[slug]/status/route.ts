@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug },
+    select: { id: true, name: true, brandColor: true, logoUrl: true, requireGeolocation: true },
+  });
   if (!tenant) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
   // Use the client's local date so UTC midnight on the server never resets statuses
@@ -71,6 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     tenantName: tenant.name,
     brandColor: tenant.brandColor,
     logoUrl: tenant.logoUrl ?? null,
+    requireGeolocation: tenant.requireGeolocation,
     employees: statusList,
   });
 }

@@ -22,6 +22,7 @@ interface TenantInfo {
   tenantName: string;
   brandColor: string;
   logoUrl: string | null;
+  requireGeolocation: boolean;
 }
 
 interface AttendanceLog {
@@ -762,7 +763,7 @@ function KioskLeaveModal({ employee, slug, brandColor, onClose }: KioskLeaveModa
 export default function KioskPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  const [tenant, setTenant] = useState<TenantInfo>({ tenantName: "", brandColor: "#4f46e5", logoUrl: null });
+  const [tenant, setTenant] = useState<TenantInfo>({ tenantName: "", brandColor: "#4f46e5", logoUrl: null, requireGeolocation: false });
   const [now, setNow] = useState<Date | null>(null);
 
   // Screens: "pin" | "unlocked"
@@ -814,7 +815,7 @@ export default function KioskPage() {
   useEffect(() => {
     fetch(`/api/kiosk/${slug}/status?localDate=${todayDate}`)
       .then((r) => r.json())
-      .then((d) => setTenant({ tenantName: d.tenantName ?? "", brandColor: d.brandColor ?? "#4f46e5", logoUrl: d.logoUrl ?? null }))
+      .then((d) => setTenant({ tenantName: d.tenantName ?? "", brandColor: d.brandColor ?? "#4f46e5", logoUrl: d.logoUrl ?? null, requireGeolocation: d.requireGeolocation ?? false }))
       .catch(() => {});
   }, [slug, todayDate]);
 
@@ -900,7 +901,7 @@ export default function KioskPage() {
       setPin("");
       return;
     }
-    setTenant({ tenantName: data.tenantName, brandColor: data.brandColor, logoUrl: data.logoUrl });
+    setTenant({ tenantName: data.tenantName, brandColor: data.brandColor, logoUrl: data.logoUrl, requireGeolocation: data.requireGeolocation ?? false });
     setEmployees(data.employees ?? []);
     setKioskToken(data.kioskToken ?? "");
     setPin("");
@@ -942,6 +943,24 @@ export default function KioskPage() {
     if (selected.action === "checkout" && !purpose.trim()) { setModalError("Please enter a purpose."); return; }
     setSubmitting(true);
     setModalError("");
+
+    let lat: number | undefined;
+    let lng: number | undefined;
+
+    if (tenant.requireGeolocation) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch {
+        setSubmitting(false);
+        setModalError("Location access is required. Please allow location in your browser and try again.");
+        return;
+      }
+    }
+
     const res = await fetch(`/api/kiosk/${slug}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -952,6 +971,7 @@ export default function KioskPage() {
         timestamp: new Date().toISOString(),
         localDate: format(new Date(), "yyyy-MM-dd"),
         purpose: purpose || undefined,
+        ...(lat != null && lng != null ? { lat, lng } : {}),
       }),
     });
     const data = await res.json();

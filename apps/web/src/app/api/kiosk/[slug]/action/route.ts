@@ -4,26 +4,37 @@ import { prisma } from "@/lib/prisma";
 import { verifyPin } from "@/lib/auth";
 
 const schema = z.object({
-  action: z.enum(["arrive", "checkout", "return", "leave"]),
+  action:    z.enum(["arrive", "checkout", "return", "leave"]),
   employeeId: z.string(),
-  pin: z.string().length(4).regex(/^\d{4}$/),
+  pin:       z.string().length(4).regex(/^\d{4}$/),
   timestamp: z.string().datetime(),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  purpose: z.string().min(1).max(500).optional(),
-  notes: z.string().max(1000).optional(),
+  purpose:   z.string().min(1).max(500).optional(),
+  notes:     z.string().max(1000).optional(),
+  lat:       z.number().min(-90).max(90).optional(),
+  lng:       z.number().min(-180).max(180).optional(),
 });
 
-// Public endpoint — company kiosk PIN gates access at the unlock step;
-// employee PIN verifies the individual action here.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug },
+    select: { id: true, requireGeolocation: true },
+  });
   if (!tenant) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
   try {
     const body = await req.json();
     const data = schema.parse(body);
+
+    // Enforce geolocation when the tenant requires it
+    if (tenant.requireGeolocation && (data.lat == null || data.lng == null)) {
+      return NextResponse.json(
+        { error: "Location is required for clock-in/out. Please allow location access and try again." },
+        { status: 422 }
+      );
+    }
 
     const employee = await prisma.employee.findFirst({
       where: { id: data.employeeId, tenantId: tenant.id, isActive: true },
@@ -45,7 +56,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       if (openSession) return NextResponse.json({ error: "Already checked in" }, { status: 409 });
 
       const log = await prisma.attendanceLog.create({
-        data: { tenantId: tenant.id, employeeId: employee.id, checkInTime: ts },
+        data: {
+          tenantId:    tenant.id,
+          employeeId:  employee.id,
+          checkInTime: ts,
+          checkInLat:  data.lat ?? null,
+          checkInLng:  data.lng ?? null,
+        },
       });
       return NextResponse.json({ log, status: "in" });
     }
@@ -64,9 +81,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         where: { id: openSession.id },
         data: {
           checkOutTime: ts,
-          isEndOfDay: data.action === "leave",
-          purpose: data.purpose ?? null,
-          notes: data.notes ?? null,
+          isEndOfDay:   data.action === "leave",
+          purpose:      data.purpose ?? null,
+          notes:        data.notes ?? null,
+          checkOutLat:  data.lat ?? null,
+          checkOutLng:  data.lng ?? null,
         },
       });
       return NextResponse.json({ log, status: data.action === "leave" ? "left" : "out" });

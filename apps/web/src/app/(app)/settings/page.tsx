@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell, UserCog, Trash2, Plus } from "lucide-react";
+import { ExternalLink, Copy, CheckCheck, Upload, X, Check, Loader2, TriangleAlert, KeyRound, Eye, EyeOff, Mail, Bell, UserCog, Trash2, Plus, MapPin } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { BRAND_COLORS } from "@/lib/brand";
@@ -103,6 +103,40 @@ export default function SettingsPage() {
       setLateAlertError("Network error. Please try again.");
     } finally {
       setLateAlertLoading(false);
+    }
+  }
+
+  // Geolocation check-in
+  const [geoEnabled,  setGeoEnabled]  = useState(false);
+  const [geoLoading,  setGeoLoading]  = useState(false);
+  const [geoError,    setGeoError]    = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings/geolocation")
+      .then((r) => r.json())
+      .then((d) => setGeoEnabled(d.enabled ?? false))
+      .catch(() => {});
+  }, []);
+
+  async function toggleGeo(enabled: boolean) {
+    setGeoLoading(true);
+    setGeoError("");
+    try {
+      const res = await fetch("/api/settings/geolocation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (res.ok) {
+        setGeoEnabled(enabled);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setGeoError(d.error ?? "Failed to save. Please try again.");
+      }
+    } catch {
+      setGeoError("Network error. Please try again.");
+    } finally {
+      setGeoLoading(false);
     }
   }
 
@@ -749,6 +783,44 @@ export default function SettingsPage() {
               : "text-red-600 bg-red-50 border-red-100"
           }`}>
             {digestSendMsg.text}
+          </p>
+        )}
+      </div>
+
+      {/* Geolocation */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="w-4 h-4 text-gray-500" />
+              <h2 className="font-semibold text-gray-900">Location Check-in</h2>
+            </div>
+            <p className="text-sm text-gray-500">
+              Require employees to share their location when clocking in or out. Location is recorded on each attendance log.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={geoEnabled}
+            onClick={() => toggleGeo(!geoEnabled)}
+            disabled={geoLoading}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${geoEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+            style={geoEnabled ? { backgroundColor: brandColor } : undefined}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${geoEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+        {geoError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</p>
+        )}
+        {geoEnabled && !geoError && (
+          <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            Location is required — employees must allow browser location access to clock in or out.
+          </p>
+        )}
+        {!geoEnabled && !geoError && (
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+            When enabled, GPS coordinates are saved on every check-in and check-out for your attendance records.
           </p>
         )}
       </div>
