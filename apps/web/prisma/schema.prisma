@@ -73,9 +73,11 @@ model Tenant {
   maxEmployees         Int                @default(5)
   logoUrl              String?
   brandColor           String             @default("#4f46e5")
-  requireGeolocation   Boolean            @default(false)
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  requireGeolocation      Boolean            @default(false)
+  geoAddonActive          Boolean            @default(false)
+  geoAddonSubscriptionId  String?            @unique
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
   users                User[]
   employees            Employee[]

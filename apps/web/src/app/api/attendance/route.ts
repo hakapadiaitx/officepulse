@@ -61,11 +61,11 @@ export async function POST(req: NextRequest) {
 
     const [employee, tenant] = await Promise.all([
       prisma.employee.findFirst({ where: { id: data.employeeId, tenantId, isActive: true } }),
-      prisma.tenant.findUnique({ where: { id: tenantId }, select: { requireGeolocation: true } }),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { requireGeolocation: true, geoAddonActive: true } }),
     ]);
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
-    if (tenant?.requireGeolocation && (data.lat == null || data.lng == null)) {
+    if (tenant?.geoAddonActive && tenant?.requireGeolocation && (data.lat == null || data.lng == null)) {
       return NextResponse.json(
         { error: "Location is required for check-out. Please allow location access and try again." },
         { status: 422 }

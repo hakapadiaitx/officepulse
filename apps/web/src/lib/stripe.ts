@@ -77,3 +77,13 @@ export const PLANS = [
     ],
   },
 ] as const;
+
+export const GEO_ADDON = {
+  id: "geolocation",
+  name: "Location Check-in",
+  description: "GPS location capture on every check-in and check-out",
+  priceMonthly: 9,
+  priceYearly: 90,
+  stripePriceMonthlyId: process.env.STRIPE_PRICE_GEO_ADDON_MONTHLY!,
+  stripePriceYearlyId: process.env.STRIPE_PRICE_GEO_ADDON_YEARLY!,
+} as const;

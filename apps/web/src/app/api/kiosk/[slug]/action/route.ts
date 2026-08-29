@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
   const tenant = await prisma.tenant.findUnique({
     where: { slug },
-    select: { id: true, requireGeolocation: true },
+    select: { id: true, requireGeolocation: true, geoAddonActive: true },
   });
   if (!tenant) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
@@ -29,8 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const body = await req.json();
     const data = schema.parse(body);
 
-    // Enforce geolocation when the tenant requires it
-    if (tenant.requireGeolocation && (data.lat == null || data.lng == null)) {
+    // Enforce geolocation only when addon is active and tenant has enabled the requirement
+    if (tenant.geoAddonActive && tenant.requireGeolocation && (data.lat == null || data.lng == null)) {
       return NextResponse.json(
         { error: "Location is required for clock-in/out. Please allow location access and try again." },
         { status: 422 }

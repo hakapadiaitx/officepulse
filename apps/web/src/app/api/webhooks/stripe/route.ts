@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantId = session.metadata?.tenantId;
         const planIdMeta = session.metadata?.planId;
+        const addonType = session.metadata?.addonType;
         if (!tenantId) break;
 
         // Retrieve subscription with expanded price so we get full price objects.
@@ -76,6 +77,18 @@ export async function POST(req: NextRequest) {
               expand: ["items.data.price"],
             })
           : null;
+
+        // Geo addon checkout
+        if (addonType === "geolocation") {
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              geoAddonActive: true,
+              geoAddonSubscriptionId: subscription?.id ?? null,
+            },
+          });
+          break;
+        }
 
         const rawPrice = subscription?.items?.data[0]?.price;
         const priceId  = extractPriceId(rawPrice);
@@ -109,6 +122,18 @@ export async function POST(req: NextRequest) {
         const sub = event.data.object as Stripe.Subscription;
         const tenantId = sub.metadata?.tenantId;
         if (!tenantId) break;
+
+        if (sub.metadata?.addonType === "geolocation") {
+          const isActive = sub.status === "active" || sub.status === "trialing";
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              geoAddonActive: isActive,
+              ...(!isActive && { requireGeolocation: false }),
+            },
+          });
+          break;
+        }
 
         // Re-fetch with expansion — the webhook payload price field is typed as
         // string | Stripe.Price and may arrive unexpanded. Explicit retrieval
@@ -147,6 +172,19 @@ export async function POST(req: NextRequest) {
         const sub = event.data.object as Stripe.Subscription;
         const tenantId = sub.metadata?.tenantId;
         if (!tenantId) break;
+
+        // Geo addon subscription cancelled
+        if (sub.metadata?.addonType === "geolocation") {
+          await prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              geoAddonActive: false,
+              geoAddonSubscriptionId: null,
+              requireGeolocation: false,
+            },
+          });
+          break;
+        }
 
         await prisma.tenant.update({
           where: { id: tenantId },

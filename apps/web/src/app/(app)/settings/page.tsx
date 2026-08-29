@@ -106,15 +106,28 @@ export default function SettingsPage() {
     }
   }
 
-  // Geolocation check-in
-  const [geoEnabled,  setGeoEnabled]  = useState(false);
-  const [geoLoading,  setGeoLoading]  = useState(false);
-  const [geoError,    setGeoError]    = useState("");
+  // Geolocation addon
+  const [geoAddonActive,   setGeoAddonActive]   = useState(false);
+  const [geoEnabled,       setGeoEnabled]       = useState(false);
+  const [geoLoading,       setGeoLoading]       = useState(false);
+  const [geoError,         setGeoError]         = useState("");
+  const [geoInterval,      setGeoInterval]      = useState<"monthly" | "yearly">("monthly");
+  const [geoCheckoutBusy,  setGeoCheckoutBusy]  = useState(false);
+  const [geoCancelConfirm, setGeoCancelConfirm] = useState(false);
+  const [geoCancelBusy,    setGeoCancelBusy]    = useState(false);
+  const [geoCancelMsg,     setGeoCancelMsg]     = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("geo_addon") === "success") {
+      window.history.replaceState({}, "", "/settings");
+    }
     fetch("/api/settings/geolocation")
       .then((r) => r.json())
-      .then((d) => setGeoEnabled(d.enabled ?? false))
+      .then((d) => {
+        setGeoEnabled(d.enabled ?? false);
+        setGeoAddonActive(d.addonActive ?? false);
+      })
       .catch(() => {});
   }, []);
 
@@ -137,6 +150,45 @@ export default function SettingsPage() {
       setGeoError("Network error. Please try again.");
     } finally {
       setGeoLoading(false);
+    }
+  }
+
+  async function startGeoCheckout() {
+    setGeoCheckoutBusy(true);
+    try {
+      const res = await fetch("/api/addons/geolocation/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interval: geoInterval }),
+      });
+      const d = await res.json();
+      if (res.ok && d.url) {
+        window.location.href = d.url;
+      } else {
+        setGeoError(d.error ?? "Could not start checkout. Please try again.");
+        setGeoCheckoutBusy(false);
+      }
+    } catch {
+      setGeoError("Network error. Please try again.");
+      setGeoCheckoutBusy(false);
+    }
+  }
+
+  async function cancelGeoAddon() {
+    setGeoCancelBusy(true);
+    try {
+      const res = await fetch("/api/addons/geolocation/cancel", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setGeoCancelMsg({ type: "ok", text: "Cancellation scheduled — location addon stays active until end of billing period." });
+        setGeoCancelConfirm(false);
+      } else {
+        setGeoCancelMsg({ type: "error", text: d.error ?? "Failed to cancel. Please try again." });
+      }
+    } catch {
+      setGeoCancelMsg({ type: "error", text: "Network error." });
+    } finally {
+      setGeoCancelBusy(false);
     }
   }
 
@@ -787,41 +839,138 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Geolocation */}
+      {/* Geolocation Addon */}
       <div className="card p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <MapPin className="w-4 h-4 text-gray-500" />
               <h2 className="font-semibold text-gray-900">Location Check-in</h2>
+              {!geoAddonActive && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Add-on</span>
+              )}
+              {geoAddonActive && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
+              )}
             </div>
             <p className="text-sm text-gray-500">
-              Require employees to share their location when clocking in or out. Location is recorded on each attendance log.
+              GPS location is captured on every check-in and check-out and shown in attendance records and reports.
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={geoEnabled}
-            onClick={() => toggleGeo(!geoEnabled)}
-            disabled={geoLoading}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${geoEnabled ? "bg-brand-600" : "bg-gray-200"}`}
-            style={geoEnabled ? { backgroundColor: brandColor } : undefined}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${geoEnabled ? "translate-x-5" : "translate-x-0"}`} />
-          </button>
+          {geoAddonActive && (
+            <button
+              role="switch"
+              aria-checked={geoEnabled}
+              onClick={() => toggleGeo(!geoEnabled)}
+              disabled={geoLoading}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${geoEnabled ? "bg-brand-600" : "bg-gray-200"}`}
+              style={geoEnabled ? { backgroundColor: brandColor } : undefined}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${geoEnabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          )}
         </div>
+
         {geoError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{geoError}</p>
         )}
-        {geoEnabled && !geoError && (
-          <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-            Location is required — employees must allow browser location access to clock in or out.
-          </p>
+
+        {/* Addon not purchased — show purchase card */}
+        {!geoAddonActive && (
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-gray-900">
+                {geoInterval === "yearly" ? "$90" : "$9"}
+              </span>
+              <span className="text-sm text-gray-500">/{geoInterval === "yearly" ? "year" : "month"}</span>
+              {geoInterval === "yearly" && (
+                <span className="ml-1 text-xs font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">Save 17%</span>
+              )}
+            </div>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> GPS coordinates on every check-in &amp; check-out</li>
+              <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Human-readable place names (street, city)</li>
+              <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Location shown in attendance list and reports</li>
+              <li className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Google Maps links on every log entry</li>
+            </ul>
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                <button
+                  onClick={() => setGeoInterval("monthly")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${geoInterval === "monthly" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setGeoInterval("yearly")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${geoInterval === "yearly" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  Yearly
+                </button>
+              </div>
+              <button
+                onClick={startGeoCheckout}
+                disabled={geoCheckoutBusy}
+                className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50"
+                style={{ backgroundColor: brandColor }}
+              >
+                {geoCheckoutBusy && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {geoCheckoutBusy ? "Redirecting…" : "Unlock Location"}
+              </button>
+            </div>
+          </div>
         )}
-        {!geoEnabled && !geoError && (
-          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-            When enabled, GPS coordinates are saved on every check-in and check-out for your attendance records.
-          </p>
+
+        {/* Addon active — show toggle state and cancel option */}
+        {geoAddonActive && !geoError && (
+          <>
+            {geoEnabled && (
+              <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                Location is required — employees must allow browser location access to clock in or out.
+              </p>
+            )}
+            {!geoEnabled && (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                Location is being recorded on every check-in. Toggle on to also make it required.
+              </p>
+            )}
+            {geoCancelMsg && (
+              <p className={`text-xs px-3 py-2 rounded-lg border ${geoCancelMsg.type === "ok" ? "bg-green-50 border-green-100 text-green-700" : "bg-red-50 border-red-100 text-red-600"}`}>
+                {geoCancelMsg.text}
+              </p>
+            )}
+            <div className="pt-1">
+              {!geoCancelConfirm ? (
+                <button
+                  onClick={() => { setGeoCancelConfirm(true); setGeoCancelMsg(null); }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Cancel location addon
+                </button>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-medium text-red-800">Cancel location addon?</p>
+                  <p className="text-xs text-red-600">You&apos;ll keep access until the end of your billing period.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={cancelGeoAddon}
+                      disabled={geoCancelBusy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {geoCancelBusy && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {geoCancelBusy ? "Cancelling…" : "Yes, cancel"}
+                    </button>
+                    <button
+                      onClick={() => { setGeoCancelConfirm(false); setGeoCancelMsg(null); }}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      Keep addon
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
