@@ -45,8 +45,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Stripe error: ${(err as Error).message}` }, { status: 502 });
   }
 
-  const priceId = sub.items.data[0]?.price?.id;
-  const resolved = priceId ? planFromPriceId(priceId) : null;
+  const rawPrice = sub.items.data[0]?.price;
+  // price is expanded so it's a full Stripe.Price object, but the type is
+  // string | Stripe.Price — guard both branches for type safety.
+  const priceId   = typeof rawPrice === "string" ? rawPrice : rawPrice?.id;
+  const stripeInt = typeof rawPrice === "string" ? undefined : rawPrice?.recurring?.interval;
+  const resolved  = priceId ? planFromPriceId(priceId) : null;
+
+  // Derive billingInterval from price lookup first, then recurring interval.
+  const billingInterval: "monthly" | "yearly" | undefined =
+    resolved?.interval ?? (stripeInt === "year" ? "yearly" : stripeInt === "month" ? "monthly" : undefined);
 
   await prisma.tenant.update({
     where: { id: tenantId },
@@ -54,11 +62,11 @@ export async function POST(req: NextRequest) {
       subscriptionStatus: (statusMap[sub.status] ?? "ACTIVE") as any,
       cancelAtPeriodEnd:  sub.cancel_at_period_end,
       currentPeriodEnd:   new Date(sub.current_period_end * 1000),
+      ...(billingInterval && { billingInterval }),
       ...(resolved && {
-        currentPlan:    resolved.plan.id,
-        planId:         resolved.plan.id,
-        maxEmployees:   resolved.plan.maxEmployees,
-        billingInterval: resolved.interval,
+        currentPlan:  resolved.plan.id,
+        planId:       resolved.plan.id,
+        maxEmployees: resolved.plan.maxEmployees,
       }),
     },
   });
